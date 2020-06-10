@@ -1,0 +1,123 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <Filter Include="Source Files">
+      <UniqueIdentifier>{4FC737F1-C7A5-4376-A066-2A32D752A2FF}</UniqueIdentifier>
+      <Extensions>cpp;c;cc;cxx;c++;def;odl;idl;hpj;bat;asm;asmx</Extensions>
+    </Filter>
+    <Filter Include="Header Files">
+      <UniqueIdentifier>{93995380-89BD-4b04-88EB-625FBE52EBFB}</UniqueIdentifier>
+      <Extensions>h;hh;hpp;hxx;h++;hm;inl;inc;ipp;xsd</Extensions>
+    </Filter>
+    <Filter Include="Resource Files">
+      <UniqueIdentifier>{67DA6AB6-F800-4c08-8B7A-83BB121AAD01}</UniqueIdentifier>
+      <Extensions>rc;ico;cur;bmp;dlg;rc2;rct;bin;rgs;gif;jpg;jpeg;jpe;resx;tiff;tif;png;wav;mfcribbon-ms</Extensions>
+    </Filter>
+    <Filter Include="efi">
+      <UniqueIdentifier>{60e260fb-b267-4e27-b4bc-d76030d883fb}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="efi\protocol">
+      <UniqueIdentifier>{a194dea9-9555-4283-95b6-471ba07dcb70}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="lend">
+      <UniqueIdentifier>{07993a20-3fd8-4213-8621-5f32073f0424}</UniqueIdentifier>
+    </Filter>
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="efi\protocol\block-io.h">
+      <Filter>efi\protocol</Filter>
+    </ClInclude>
+    <ClInclude Include="efi\protocol\device-path.h">
+      <Filter>efi\protocol</Filter>
+    </ClInclude>
+    <ClInclude Include="efi\protocol\device-path-to-text.h">
+      <Filter>efi\protocol</Filter>
+    </ClInclude>
+    <ClInclude Include="efi\protocol\disk-io.h">
+      <Filter>efi\protocol</Filter>
+    </ClInclude>
+    <ClInclude Include="efi\protocol\driver-binding.h">
+      <Filter>efi\protocol</Filter>
+    </ClInclude>
+    <ClInclude Include="efi\protocol\file.h">
+      <Filter>efi\protocol</Filter>
+    </ClInclude>
+    <ClInclude Include="efi\protocol\graphics-output.h">
+      <Filter>efi\protocol</Filter>
+    </ClInclude>
+    <ClInclude Include="efi\protocol\loaded-image.h">
+      <Filter>efi\protocol</Filter>
+    </ClInclude>
+    <ClInclude Include="efi\protocol\managed-network.h">
+      <Filter>efi\protocol</Filter>
+    </ClInclude>
+    <ClInclude Include="efi\protocol\pci-root-bridge-io.h">
+      <Filter>efi\protocol</Filter>
+    </ClInclude>
+    <ClInclude Include="efi\protocol\simple-file-system.h">
+      <Filter>efi\protocol</Filter>
+    </ClInclude>
+    <ClInclude Include="efi\protocol\simple-network.h">
+      <Filter>efi\protocol</Filter>
+    </ClInclude>
+    <ClInclude Include="efi\protocol\simple-text-input.h">
+      <Filter>efi\protocol</Filter>
+    </ClInclude>
+    <ClInclude Include="efi\protocol\simple-text-output.h">
+      <Filter>efi\protocol</Filter>
+    </ClInclude>
+    <ClInclude Include="efi\protocol\usb-io.h">
+      <Filter>efi\protocol</Filter>
+    </ClInclude>
+    <ClInclude Include="lend\ld32.h">
+      <Filter>lend</Filter>
+    </ClInclude>
+    <ClInclude Include="efi\boot-services.h">
+      <Filter>efi</Filter>
+    </ClInclude>
+    <ClInclude Include="efi\runtime-services.h">
+      <Filter>efi</Filter>
+    </ClInclude>
+    <ClInclude Include="efi\system-table.h">
+      <Filter>efi</Filter>
+    </ClInclude>
+    <ClInclude Include="efi\types.h">
+      <Filter>efi</Filter>
+    </ClInclude>
+    <ClInclude Include="comms.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="nt.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="pe.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="shk.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="utils.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="mm.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="lend\ld32.c">
+      <Filter>lend</Filter>
+    </ClCompile>
+    <ClCompile Include="comms.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="main.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="shk.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="utils.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+  </ItemGroup>
+</Project>
