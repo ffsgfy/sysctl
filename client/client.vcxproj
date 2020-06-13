@@ -150,12 +150,14 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClCompile Include="asignal.c" />
     <ClCompile Include="comms.c" />
     <ClCompile Include="main.cpp" />
     <ClCompile Include="mmgr.cpp" />
     <ClCompile Include="winutils.c" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="asignal.h" />
     <ClInclude Include="comms.h" />
     <ClInclude Include="mmgr.hpp" />
     <ClInclude Include="winutils.h" />

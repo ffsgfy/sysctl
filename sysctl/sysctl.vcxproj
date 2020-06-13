@@ -101,7 +101,7 @@
       <CallingConvention>StdCall</CallingConvention>
       <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
       <BufferSecurityCheck>false</BufferSecurityCheck>
-      <AdditionalOptions>/clang:-fno-builtin %(AdditionalOptions)</AdditionalOptions>
+      <AdditionalOptions>/clang:-fno-builtin /clang:-msse4.2 %(AdditionalOptions)</AdditionalOptions>
     </ClCompile>
     <Link>
       <SubSystem>EFI Runtime</SubSystem>
@@ -123,7 +123,7 @@
       <CallingConvention>StdCall</CallingConvention>
       <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
       <BufferSecurityCheck>false</BufferSecurityCheck>
-      <AdditionalOptions>/clang:-fno-builtin %(AdditionalOptions)</AdditionalOptions>
+      <AdditionalOptions>/clang:-fno-builtin /clang:-msse4.2 %(AdditionalOptions)</AdditionalOptions>
     </ClCompile>
     <Link>
       <SubSystem>EFI Runtime</SubSystem>
@@ -148,7 +148,7 @@
       <CallingConvention>StdCall</CallingConvention>
       <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
       <BufferSecurityCheck>false</BufferSecurityCheck>
-      <AdditionalOptions>/clang:-fno-builtin %(AdditionalOptions)</AdditionalOptions>
+      <AdditionalOptions>/clang:-fno-builtin /clang:-msse4.2 %(AdditionalOptions)</AdditionalOptions>
     </ClCompile>
     <Link>
       <SubSystem>EFI Runtime</SubSystem>
@@ -175,7 +175,7 @@
       <CallingConvention>StdCall</CallingConvention>
       <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
       <BufferSecurityCheck>false</BufferSecurityCheck>
-      <AdditionalOptions>/clang:-fno-builtin %(AdditionalOptions)</AdditionalOptions>
+      <AdditionalOptions>/clang:-fno-builtin /clang:-msse4.2 %(AdditionalOptions)</AdditionalOptions>
     </ClCompile>
     <Link>
       <SubSystem>EFI Runtime</SubSystem>

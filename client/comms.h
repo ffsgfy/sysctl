@@ -20,8 +20,26 @@ enum {
     eCommsReplacePtes,
     eCommsRestorePtes,
     eCommsDuplicateHandle,
-    eCommsCloseHandle
+    eCommsCloseHandle,
+
+    eCommsEnumSize
 };
+
+typedef struct {
+    uint64_t msg; // pointer to comms_header_t
+    uint64_t size; // msg size
+    uint64_t timeout; // milliseconds
+
+    struct {
+        uint64_t signal;
+        uint64_t thread_id;
+    } um;
+
+    struct {
+        uint64_t signal;
+        uint64_t thread_id;
+    } km;
+} comms_shared_t;
 
 typedef struct {
     uint64_t type;
@@ -50,11 +68,7 @@ typedef struct {
     comms_header_t header;
     uint64_t kernel_ptr;
     uint64_t kernel_size;
-    uint64_t msg_ptr;
-    uint64_t msg_size;
-    uint64_t event_um;
-    uint64_t event_km;
-    uint64_t timeout; // in milliseconds
+    uint64_t shared;
 } comms_init_t;
 
 typedef struct {
@@ -110,14 +124,6 @@ typedef struct {
 } comms_restore_ptes_t;
 
 typedef struct {
-    uint64_t msg;
-    uint64_t size;
-    void* event_um;
-    void* event_km;
-    uint64_t timeout; // in milliseconds
-} comms_state_t;
-
-typedef struct {
     comms_header_t header;
     uint64_t process; // target
     uint64_t handle;
@@ -131,19 +137,19 @@ typedef struct {
     uint64_t handle;
 } comms_close_handle_t;
 
-void comms_dispatch(comms_header_t* msg, size_t size, comms_state_t* state);
-uint64_t comms_get_process(uint32_t process_id, comms_state_t* state);
-void comms_dereference(uint64_t object, comms_state_t* state);
-void comms_read(uint64_t process, void* src, void* dst, size_t size, comms_state_t* state);
-void comms_write(uint64_t process, void* src, void* dst, size_t size, comms_state_t* state);
-void comms_init(uint64_t kernel_ptr, size_t kernel_size, comms_state_t* state);
-void* comms_find_pattern(uint64_t process, void* start, size_t size, const char* pattern, const char* mask, comms_state_t* state);
-void comms_exit(comms_state_t* state);
-void comms_heartbeat(comms_state_t* state);
-void comms_get_module(uint64_t process, const wchar_t* module, void** module_base, size_t* module_size, comms_state_t* state);
-void comms_mem_alloc(uint64_t process, void** base, size_t* size, uint32_t type, uint32_t protect, comms_state_t* state);
-void comms_mem_free(uint64_t process, void** base, size_t* size, uint32_t type, comms_state_t* state);
-bool comms_replace_ptes(uint64_t process, void* src, void* dst, size_t size, void* original, comms_state_t* state);
-bool comms_restore_ptes(uint64_t process, void* base, size_t size, void* original, comms_state_t* state);
-void* comms_duplicate_handle(uint64_t process, void* handle, uint32_t access, uint32_t options, comms_state_t* state);
-void comms_close_handle(uint64_t process, void* handle, comms_state_t* state);
+void comms_dispatch(comms_header_t* msg, size_t size, comms_shared_t* shared);
+uint64_t comms_get_process(uint32_t process_id, comms_shared_t* shared);
+void comms_dereference(uint64_t object, comms_shared_t* shared);
+void comms_read(uint64_t process, void* src, void* dst, size_t size, comms_shared_t* shared);
+void comms_write(uint64_t process, void* src, void* dst, size_t size, comms_shared_t* shared);
+void comms_init(uint64_t kernel_ptr, size_t kernel_size, comms_shared_t* shared);
+void* comms_find_pattern(uint64_t process, void* start, size_t size, const char* pattern, const char* mask, comms_shared_t* shared);
+void comms_exit(comms_shared_t* shared);
+void comms_heartbeat(comms_shared_t* shared);
+void comms_get_module(uint64_t process, const wchar_t* module, void** module_base, size_t* module_size, comms_shared_t* shared);
+void comms_mem_alloc(uint64_t process, void** base, size_t* size, uint32_t type, uint32_t protect, comms_shared_t* shared);
+void comms_mem_free(uint64_t process, void** base, size_t* size, uint32_t type, comms_shared_t* shared);
+bool comms_replace_ptes(uint64_t process, void* src, void* dst, size_t size, void* original, comms_shared_t* shared);
+bool comms_restore_ptes(uint64_t process, void* base, size_t size, void* original, comms_shared_t* shared);
+void* comms_duplicate_handle(uint64_t process, void* handle, uint32_t access, uint32_t options, comms_shared_t* shared);
+void comms_close_handle(uint64_t process, void* handle, comms_shared_t* shared);

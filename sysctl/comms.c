@@ -1,3 +1,4 @@
+#include <pmmintrin.h>
 #include "comms.h"
 #include "utils.h"
 
@@ -298,19 +299,82 @@ PVOID FindSectionPattern(PVOID Module, PUCHAR SectionName, PUCHAR Pattern, PUCHA
     return NULL;
 }
 
+VOID InitUnicodeString(PUNICODE_STRING Dst, PWCHAR Src) {
+    Dst->Buffer = Src;
+    Dst->Length = sizeof(WCHAR) * u_strlen16(Src);
+    Dst->MaximumLength = Dst->Length + sizeof(WCHAR);
+}
+
+PVOID GetSystemRoutine(comms_state_t* state, PWCHAR RoutineName) {
+    UNICODE_STRING URoutineName;
+    InitUnicodeString(&URoutineName, RoutineName);
+    return state->Api.MmGetSystemRoutineAddress(&URoutineName);
+}
+
+UINT32 HashSyscall(PCHAR RoutineName) {
+    UINT32 Hash = 0, Step = 0;
+    for (; *RoutineName; ++RoutineName) {
+        Step = 1025 * (Hash + *RoutineName);
+        Hash = Step ^ (Step >> 6);
+    }
+    return Hash;
+}
+
+PVOID GetSyscall(comms_state_t* state, UINT32 Hash) {
+    PKISERVICESTAB_ENTRY Entry = (PKISERVICESTAB_ENTRY)state->Api.KiServicesTab;
+    for (size_t i = 0; i < 464; ++i, ++Entry) {
+        if (Entry->NameHash == Hash) {
+            return Entry->SystemService;
+        }
+    }
+
+    return NULL;
+}
+
 void comms_wait(comms_state_t* state) {
     while (!state->Exit) {
-        if (state->Api.ZwWaitForSingleObject(state->Event.UM, FALSE, &state->Timeout) == 0) { // check for STATUS_SUCCESS
-            if (*state->Msg.Ptr) {
-                comms_dispatch(state, *(comms_header_t**)state->Msg.Ptr, *state->Msg.Size);
-            }
-        }
-        else { // on STATUS_TIMEOUT or STATUS_INVALID_HANDLE
-            break;
-        }
 
-        if (!NT_SUCCESS(state->Api.ZwSetEvent(state->Event.KM, NULL))) {
-            break;
+        LARGE_INTEGER frequency;
+        LARGE_INTEGER counter = state->Api.KeQueryPerformanceCounter(&frequency);
+        counter.QuadPart += state->Shared.Ptr->Timeout * frequency.QuadPart / 1000;
+
+        /*while (!(state->Shared.Ptr->SignalUM)) {
+            _mm_monitor(&(state->Shared.Ptr->SignalUM), 0, 0);
+            _mm_mwait(0, 0);
+
+            if (state->Api.KeQueryPerformanceCounter(NULL).QuadPart > counter.QuadPart) {
+                return;
+            }
+        }*/
+
+        /*while (!(state->Shared.Ptr->SignalUM)) {
+            _mm_pause();
+            _mm_mfence();
+
+            if (state->Api.KeQueryPerformanceCounter(NULL).QuadPart > counter.QuadPart) {
+                return;
+            }
+        }*/
+
+        do {
+            state->Api.ZwWaitForAlertByThreadId(&(state->Shared.Ptr->UM.Signal), &(state->Shared.Ptr->Timeout));
+            if (state->Api.KeQueryPerformanceCounter(NULL).QuadPart > counter.QuadPart) {
+                return;
+            }
+        } while (!(state->Shared.Ptr->UM.Signal));
+        state->Shared.Ptr->UM.Signal = 0;
+
+        comms_dispatch(state, (comms_header_t*)state->Shared.Ptr->Msg, state->Shared.Ptr->Size);
+
+        counter = state->Api.KeQueryPerformanceCounter(&frequency);
+        counter.QuadPart += state->Shared.Ptr->Timeout * frequency.QuadPart / 1000;
+
+        state->Shared.Ptr->KM.Signal = 1;
+        while (state->Shared.Ptr->KM.Signal) {
+            state->Api.ZwAlertThreadByThreadId((HANDLE)state->Shared.Ptr->UM.ThreadId);
+            if (state->Api.KeQueryPerformanceCounter(NULL).QuadPart > counter.QuadPart) {
+                return;
+            }
         }
     }
 }
@@ -443,34 +507,37 @@ void comms_init(comms_init_t* msg, size_t size) {
     }
 
     state.Kernel = (void*)msg->kernel_ptr;
-    state.Msg.Ptr = (void**)msg->msg_ptr;
-    state.Msg.Size = (size_t*)msg->msg_size;
-    state.Event.UM = (void*)msg->event_um;
-    state.Event.KM = (void*)msg->event_km;
-    state.Timeout.QuadPart = -(msg->timeout * 10000);
 
-    state.Api.PsLookupProcessByProcessId = GetModuleExport(state.Kernel, "PsLookupProcessByProcessId");
-    state.Api.ObfDereferenceObject = GetModuleExport(state.Kernel, "ObfDereferenceObject");
-    state.Api.KeStackAttachProcess = GetModuleExport(state.Kernel, "KeStackAttachProcess");
-    state.Api.KeUnstackDetachProcess = GetModuleExport(state.Kernel, "KeUnstackDetachProcess");
-    state.Api.PsGetProcessPeb = GetModuleExport(state.Kernel, "PsGetProcessPeb");
-    state.Api.IoGetCurrentProcess = GetModuleExport(state.Kernel, "IoGetCurrentProcess");
-    state.Api.RtlCompareUnicodeString = GetModuleExport(state.Kernel, "RtlCompareUnicodeString");
-    state.Api.ExAllocatePoolWithTag = GetModuleExport(state.Kernel, "ExAllocatePoolWithTag");
-    state.Api.ExFreePoolWithTag = GetModuleExport(state.Kernel, "ExFreePoolWithTag");
-    state.Api.RtlCopyMemory = GetModuleExport(state.Kernel, "RtlCopyMemory");
-    state.Api.MmSecureVirtualMemory = GetModuleExport(state.Kernel, "MmSecureVirtualMemory");
-    state.Api.MmUnsecureVirtualMemory = GetModuleExport(state.Kernel, "MmUnsecureVirtualMemory");
-    state.Api.DbgPrintEx = GetModuleExport(state.Kernel, "DbgPrintEx");
-    state.Api.MmCopyVirtualMemory = GetModuleExport(state.Kernel, "MmCopyVirtualMemory");
-    state.Api.ZwWaitForSingleObject = GetModuleExport(state.Kernel, "ZwWaitForSingleObject");
-    state.Api.ZwSetEvent = GetModuleExport(state.Kernel, "ZwSetEvent");
-    state.Api.ExAcquireFastMutexUnsafe = GetModuleExport(state.Kernel, "ExAcquireFastMutexUnsafe");
-    state.Api.ExReleaseFastMutexUnsafe = GetModuleExport(state.Kernel, "ExReleaseFastMutexUnsafe");
-    state.Api.ZwAllocateVirtualMemory = GetModuleExport(state.Kernel, "ZwAllocateVirtualMemory");
-    state.Api.ZwFreeVirtualMemory = GetModuleExport(state.Kernel, "ZwFreeVirtualMemory");
-    state.Api.ZwDuplicateObject = GetModuleExport(state.Kernel, "ZwDuplicateObject");
-    state.Api.ZwClose = GetModuleExport(state.Kernel, "ZwClose");
+    state.Api.MmGetSystemRoutineAddress = GetModuleExport(state.Kernel, "MmGetSystemRoutineAddress");
+    state.Api.PsLookupProcessByProcessId = GetSystemRoutine(&state, L"PsLookupProcessByProcessId");
+    state.Api.ObfDereferenceObject = GetSystemRoutine(&state, L"ObfDereferenceObject");
+    state.Api.KeStackAttachProcess = GetSystemRoutine(&state, L"KeStackAttachProcess");
+    state.Api.KeUnstackDetachProcess = GetSystemRoutine(&state, L"KeUnstackDetachProcess");
+    state.Api.PsGetProcessPeb = GetSystemRoutine(&state, L"PsGetProcessPeb");
+    state.Api.IoGetCurrentProcess = GetSystemRoutine(&state, L"IoGetCurrentProcess");
+    state.Api.RtlCompareUnicodeString = GetSystemRoutine(&state, L"RtlCompareUnicodeString");
+    state.Api.ExAllocatePoolWithTag = GetSystemRoutine(&state, L"ExAllocatePoolWithTag");
+    state.Api.ExFreePoolWithTag = GetSystemRoutine(&state, L"ExFreePoolWithTag");
+    state.Api.RtlCopyMemory = GetSystemRoutine(&state, L"RtlCopyMemory");
+    state.Api.MmSecureVirtualMemory = GetSystemRoutine(&state, L"MmSecureVirtualMemory");
+    state.Api.MmUnsecureVirtualMemory = GetSystemRoutine(&state, L"MmUnsecureVirtualMemory");
+    state.Api.DbgPrintEx = GetSystemRoutine(&state, L"DbgPrintEx");
+    state.Api.MmCopyVirtualMemory = GetSystemRoutine(&state, L"MmCopyVirtualMemory");
+    state.Api.ZwWaitForSingleObject = GetSystemRoutine(&state, L"ZwWaitForSingleObject");
+    state.Api.ZwSetEvent = GetSystemRoutine(&state, L"ZwSetEvent");
+    state.Api.ExAcquireFastMutexUnsafe = GetSystemRoutine(&state, L"ExAcquireFastMutexUnsafe");
+    state.Api.ExReleaseFastMutexUnsafe = GetSystemRoutine(&state, L"ExReleaseFastMutexUnsafe");
+    state.Api.ZwAllocateVirtualMemory = GetSystemRoutine(&state, L"ZwAllocateVirtualMemory");
+    state.Api.ZwFreeVirtualMemory = GetSystemRoutine(&state, L"ZwFreeVirtualMemory");
+    state.Api.ZwDuplicateObject = GetSystemRoutine(&state, L"ZwDuplicateObject");
+    state.Api.ZwClose = GetSystemRoutine(&state, L"ZwClose");
+    state.Api.KeQueryPerformanceCounter = GetSystemRoutine(&state, L"KeQueryPerformanceCounter");
+    state.Api.KeEnterCriticalRegion = GetSystemRoutine(&state, L"KeEnterCriticalRegion");
+    state.Api.KeLeaveCriticalRegion = GetSystemRoutine(&state, L"KeLeaveCriticalRegion");
+
+    state.Api.KiServicesTab = (uint64_t*)GetModuleExport(state.Kernel, "NtImageInfo") + 3;
+    state.Api.ZwAlertThreadByThreadId = GetSyscall(&state, HashSyscall("AlertThreadByThreadId"));
+    state.Api.ZwWaitForAlertByThreadId = GetSyscall(&state, HashSyscall("WaitForAlertByThreadId"));
 
     uint8_t* MiGetPteAddress_Pattern = (uint8_t*)"\x48\xC1\xE9\x09\x48\xB8\x00\x00\x00\x00\x00\x00\x00\x00\x48\x23\xC8\x48\xB8\x00\x00\x00\x00\x00\x00\x00\x00\x48\x03\xC1\xC3";
     uint8_t* MiGetPteAddress_Mask = (uint8_t*)"xxxxxx????????xxxxx????????xxxx";
@@ -481,14 +548,9 @@ void comms_init(comms_init_t* msg, size_t size) {
 
     state.Exit = FALSE;
 
-    // Secure our access to Msg.Ptr
-    if (!(state.Msg.PtrHandle = state.Api.MmSecureVirtualMemory(state.Msg.Ptr, sizeof(void*), PAGE_READONLY))) {
-        return;
-    }
-
-    // Secure our access to Msg.Size
-    if (!(state.Msg.SizeHandle = state.Api.MmSecureVirtualMemory(state.Msg.Ptr, sizeof(size_t), PAGE_READONLY))) {
-        state.Api.MmUnsecureVirtualMemory(state.Msg.PtrHandle);
+    // secure our access to the shared state
+    state.Shared.Ptr = (comms_shared_t*)msg->shared;
+    if (!(state.Shared.Handle = state.Api.MmSecureVirtualMemory(state.Shared.Ptr, sizeof(comms_shared_t), PAGE_READWRITE))) {
         return;
     }
 
@@ -501,10 +563,12 @@ void comms_init(comms_init_t* msg, size_t size) {
         state.Api.ExReleaseFastMutexUnsafe(ExpEnvironmentLock);
     }
 
+    state.Api.KeLeaveCriticalRegion();
+
     comms_wait(&state);
 
-    state.Api.MmUnsecureVirtualMemory(state.Msg.PtrHandle);
-    state.Api.MmUnsecureVirtualMemory(state.Msg.SizeHandle);
+    state.Api.KeEnterCriticalRegion();
+    state.Api.MmUnsecureVirtualMemory(state.Shared.Handle);
 
     if (state.Buffer.Ptr) {
         FreePool(&state, state.Buffer.Ptr);

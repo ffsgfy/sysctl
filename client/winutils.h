@@ -185,6 +185,8 @@ EXTERN_C_START
 NTSYSAPI NTSTATUS NTAPI NtSetSystemEnvironmentValueEx(UNICODE_STRING* VariableName, GUID* VendorGuid, PVOID Value, ULONG ValueLength, ULONG Attributes);
 NTSYSAPI NTSTATUS NTAPI RtlAdjustPrivilege(ULONG Privilege, BOOLEAN Enable, BOOLEAN Client, BOOLEAN* WasEnabled);
 NTSYSAPI NTSTATUS NTAPI NtQuerySystemInformation(SYSTEM_INFO_CLASS SystemInformationClass, PVOID SystemInformation, ULONG SystemInformationLength, PULONG ReturnLength);
+NTSYSAPI NTSTATUS NTAPI NtWaitForAlertByThreadId(PVOID Address, DWORD Milliseconds);
+NTSYSAPI NTSTATUS NTAPI NtAlertThreadByThreadId(HANDLE ThreadId);
 EXTERN_C_END
 
 typedef struct _SYSTEM_MODULE_ENTRY

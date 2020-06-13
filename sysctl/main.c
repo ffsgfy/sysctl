@@ -98,13 +98,14 @@ efi_status EFIAPI efi_main(efi_handle ImageHandle, efi_system_table* SystemTable
         }
         else {
             SystemTable->ConOut->OutputString(SystemTable->ConOut, L"Failed to allocate buffer\n\r");
-            status = EFI_UNSUPPORTED;
+            status = EFI_PROTOCOL_ERROR;
         }
 
         g_BS->CloseProtocol(ImageHandle, &g_LoadedImageProtocol, ImageHandle, NULL);
     }
     else {
         SystemTable->ConOut->OutputString(SystemTable->ConOut, L"Failed to open loaded image protocol\n\r");
+        status = EFI_LOAD_ERROR;
     }
 
     SystemTable->ConOut->OutputString(SystemTable->ConOut, L"Exiting\n\r");

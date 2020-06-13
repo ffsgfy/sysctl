@@ -1,5 +1,6 @@
-#include <stdint.h>
-#include <stdio.h>
+#include <cstdint>
+#include <cstdio>
+#include <ctime>
 #include <thread>
 
 #include "mmgr.hpp"
@@ -19,12 +20,17 @@ int main() {
     long double time_sum = 0.0;
     long double time_count = 0.0;
 
-    for (size_t i = 0; i < 1000000; ++i) {
+    printf("Starting...\n");
+    for (size_t i = 0; i < 100000; ++i) {
         QueryPerformanceCounter(&time_before);
         mmgr.heartbeat();
         QueryPerformanceCounter(&time_after);
         time_sum += (long double)(time_after.QuadPart - time_before.QuadPart);
         time_count += 1.0;
+
+        if (i % 10000 == 0) {
+            printf("Dun %lli\n", i);
+        }
     }
 
     printf("%Lf per iteration\n", time_sum / time_count);

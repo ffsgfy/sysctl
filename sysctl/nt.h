@@ -93,6 +93,13 @@ typedef WORD LANGID;
 
 typedef VOID EPROCESS, *PEPROCESS;
 
+typedef struct _KISERVICESTAB_ENTRY
+{
+    UINT32 NameHash;
+    UINT32 ParameterCount;
+    PVOID SystemService;
+} KISERVICESTAB_ENTRY, *PKISERVICESTAB_ENTRY;
+
 enum {
     NonPagedPool,
     NonPagedPoolExecute = NonPagedPool,

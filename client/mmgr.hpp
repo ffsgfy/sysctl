@@ -27,26 +27,26 @@ public:
 	template<typename T>
 	T read(void* src) {
 		T dst;
-		comms_read(m_process, src, &dst, sizeof(T), &m_comms_state);
+		comms_read(m_process, src, &dst, sizeof(T), &m_comms_shared);
 		return dst;
 	}
 
 	template<typename T>
 	void read(void* src, T& dst) {
-		comms_read(m_process, src, &dst, sizeof(T), &m_comms_state);
+		comms_read(m_process, src, &dst, sizeof(T), &m_comms_shared);
 	}
 
 	void read(void* src, void* dst, size_t size) {
-		comms_read(m_process, src, dst, size, &m_comms_state);
+		comms_read(m_process, src, dst, size, &m_comms_shared);
 	}
 
 	template<typename T>
 	void write(const T& src, void* dst) {
-		comms_write(m_process, (void*)&src, dst, sizeof(T), &m_comms_state);
+		comms_write(m_process, (void*)&src, dst, sizeof(T), &m_comms_shared);
 	}
 
 	void write(const void* src, void* dst, size_t size) {
-		comms_write(m_process, (void*)src, dst, size, &m_comms_state);
+		comms_write(m_process, (void*)src, dst, size, &m_comms_shared);
 	}
 
 	void get_module(const wchar_t* module, void** module_base, size_t* module_size);
@@ -68,7 +68,7 @@ public:
 	void close_handle(void* handle);
 
 private:
-	comms_state_t m_comms_state;
+	comms_shared_t m_comms_shared;
 	std::thread m_comms_thread;
 
 	uint32_t m_process_id = 0;

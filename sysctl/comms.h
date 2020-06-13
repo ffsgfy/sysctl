@@ -6,6 +6,7 @@
 
 #define COMMS_PATTERN_LENGTH 31
 
+typedef PVOID (NTAPI*MmGetSystemRoutineAddress_t)(PUNICODE_STRING SystemRoutineName);
 typedef NTSTATUS (NTAPI*PsLookupProcessByProcessId_t)(HANDLE ProcessId, PEPROCESS* Process);
 typedef LONG_PTR (NTAPI*ObfDereferenceObject_t)(PVOID Object);
 typedef VOID (NTAPI*KeStackAttachProcess_t)(PEPROCESS PROCESS, PRKAPC_STATE ApcState);
@@ -28,26 +29,40 @@ typedef NTSTATUS (NTAPI*ZwAllocateVirtualMemory_t)(HANDLE ProcessHandle, PVOID* 
 typedef NTSTATUS (NTAPI*ZwFreeVirtualMemory_t)(HANDLE ProcessHandle, PVOID* BaseAddress, PSIZE_T RegionSize, ULONG FreeType);
 typedef NTSTATUS (NTAPI*ZwDuplicateObject_t)(HANDLE SourceProcessHandle, HANDLE SourceHandle, HANDLE TargetProcessHandle, HANDLE* TargetHandle, ULONG DesiredAccess, ULONG HandleAttributes, ULONG Options);
 typedef NTSTATUS (NTAPI*ZwClose_t)(HANDLE Handle);
+typedef LARGE_INTEGER (NTAPI*KeQueryPerformanceCounter_t)(PLARGE_INTEGER PerformanceFrequency);
+typedef VOID (NTAPI*KeEnterCriticalRegion_t)(VOID);
+typedef VOID (NTAPI* KeLeaveCriticalRegion_t)(VOID);
 
 typedef PMMPTE (NTAPI*MiGetPteAddress_t)(PVOID Address);
+typedef NTSTATUS (NTAPI*ZwAlertThreadByThreadId_t)(HANDLE ThreadId);
+typedef NTSTATUS (NTAPI*ZwWaitForAlertByThreadId_t)(PVOID Address, UINT64* Milliseconds);
+
+typedef struct {
+    uint64_t Msg; // pointer to comms_header_t
+    uint64_t Size; // msg size
+    uint64_t Timeout; // milliseconds
+
+    struct {
+        uint64_t Signal;
+        uint64_t ThreadId;
+    } UM;
+
+    struct {
+        uint64_t Signal;
+        uint64_t ThreadId;
+    } KM;
+} comms_shared_t;
 
 typedef struct {
     PVOID Kernel;
-    LARGE_INTEGER Timeout;
-    
-    struct {
-        PVOID* Ptr;
-        HANDLE PtrHandle;
-        PSIZE_T Size;
-        HANDLE SizeHandle;
-    } Msg;
 
     struct {
-        PVOID UM;
-        PVOID KM;
-    } Event;
+        comms_shared_t* Ptr;
+        HANDLE Handle;
+    } Shared;
     
     struct {
+        MmGetSystemRoutineAddress_t MmGetSystemRoutineAddress;
         PsLookupProcessByProcessId_t PsLookupProcessByProcessId;
         ObfDereferenceObject_t ObfDereferenceObject;
         KeStackAttachProcess_t KeStackAttachProcess;
@@ -70,6 +85,13 @@ typedef struct {
         ZwFreeVirtualMemory_t ZwFreeVirtualMemory;
         ZwDuplicateObject_t ZwDuplicateObject;
         ZwClose_t ZwClose;
+        KeQueryPerformanceCounter_t KeQueryPerformanceCounter;
+        KeEnterCriticalRegion_t KeEnterCriticalRegion;
+        KeLeaveCriticalRegion_t KeLeaveCriticalRegion;
+
+        void* KiServicesTab;
+        ZwAlertThreadByThreadId_t ZwAlertThreadByThreadId;
+        ZwWaitForAlertByThreadId_t ZwWaitForAlertByThreadId;
 
         MiGetPteAddress_t MiGetPteAddress;
     } Api;
@@ -97,7 +119,9 @@ enum {
     eCommsReplacePtes,
     eCommsRestorePtes,
     eCommsDuplicateHandle,
-    eCommsCloseHandle
+    eCommsCloseHandle,
+
+    eCommsEnumSize
 };
 
 typedef struct {
@@ -127,11 +151,7 @@ typedef struct {
     comms_header_t header;
     uint64_t kernel_ptr;
     uint64_t kernel_size;
-    uint64_t msg_ptr;
-    uint64_t msg_size;
-    uint64_t event_um;
-    uint64_t event_km;
-    uint64_t timeout; // in milliseconds
+    uint64_t shared;
 } comms_init_t;
 
 typedef struct {
