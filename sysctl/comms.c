@@ -265,6 +265,28 @@ VOID CloseHandle(comms_state_t* state, PEPROCESS Process, HANDLE Handle) {
     state->Api.KeUnstackDetachProcess(&ApcState);
 }
 
+BOOL ProcessMemLock(comms_state_t* state, PEPROCESS Process, PVOID Base, SIZE_T Size) {
+    KAPC_STATE ApcState;
+    NTSTATUS Status = -1;
+
+    state->Api.KeStackAttachProcess(Process, &ApcState);
+    Status = state->Api.ZwLockVirtualMemory(NtCurrentProcess(), &Base, &Size, MAP_PROCESS);
+    state->Api.KeUnstackDetachProcess(&ApcState);
+
+    return NT_SUCCESS(Status);
+}
+
+BOOL ProcessMemUnlock(comms_state_t* state, PEPROCESS Process, PVOID Base, SIZE_T Size) {
+    KAPC_STATE ApcState;
+    NTSTATUS Status = -1;
+
+    state->Api.KeStackAttachProcess(Process, &ApcState);
+    Status = state->Api.ZwUnlockVirtualMemory(NtCurrentProcess(), &Base, &Size, MAP_PROCESS);
+    state->Api.KeUnstackDetachProcess(&ApcState);
+
+    return NT_SUCCESS(Status);
+}
+
 PVOID FindPattern(comms_state_t* state, PEPROCESS Process, PVOID Start, SIZE_T Size, PUCHAR Pattern, PUCHAR Mask) {
     PVOID Result = NULL;
     KAPC_STATE ApcState;
@@ -359,7 +381,7 @@ void comms_wait(comms_state_t* state) {
         }*/
 
         do {
-            state->Api.ZwWaitForAlertByThreadId(&(state->Shared.Ptr->UM.Signal), &(state->Shared.Ptr->Timeout));
+            state->Api.NtWaitForAlertByThreadId(&(state->Shared.Ptr->UM.Signal), &(state->Shared.Ptr->Timeout));
             if (state->Api.KeQueryPerformanceCounter(NULL).QuadPart > counter.QuadPart) {
                 return;
             }
@@ -373,7 +395,7 @@ void comms_wait(comms_state_t* state) {
 
         state->Shared.Ptr->KM.Signal = 1;
         while (state->Shared.Ptr->KM.Signal) {
-            state->Api.ZwAlertThreadByThreadId((HANDLE)state->Shared.Ptr->UM.ThreadId);
+            state->Api.NtAlertThreadByThreadId((HANDLE)state->Shared.Ptr->UM.ThreadId);
             if (state->Api.KeQueryPerformanceCounter(NULL).QuadPart > counter.QuadPart) {
                 return;
             }
@@ -497,6 +519,22 @@ void comms_close_handle(comms_state_t* state, comms_close_handle_t* msg, size_t 
     CloseHandle(state, (void*)msg->process, (void*)msg->handle);
 }
 
+void comms_mem_lock(comms_state_t* state, comms_mem_lock_t* msg, size_t size) {
+    if (size < sizeof(comms_mem_lock_t)) {
+        return;
+    }
+
+    msg->header.result = (uint64_t)ProcessMemLock(state, (void*)msg->process, (void*)msg->base, msg->size);
+}
+
+void comms_mem_unlock(comms_state_t* state, comms_mem_unlock_t* msg, size_t size) {
+    if (size < sizeof(comms_mem_unlock_t)) {
+        return;
+    }
+
+    msg->header.result = (uint64_t)ProcessMemUnlock(state, (void*)msg->process, (void*)msg->base, msg->size);
+}
+
 void comms_init(comms_init_t* msg, size_t size) {
     comms_state_t state;
 
@@ -536,10 +574,12 @@ void comms_init(comms_init_t* msg, size_t size) {
     state.Api.KeQueryPerformanceCounter = GetSystemRoutine(&state, L"KeQueryPerformanceCounter");
     state.Api.KeEnterCriticalRegion = GetSystemRoutine(&state, L"KeEnterCriticalRegion");
     state.Api.KeLeaveCriticalRegion = GetSystemRoutine(&state, L"KeLeaveCriticalRegion");
+    state.Api.ZwLockVirtualMemory = GetSystemRoutine(&state, L"ZwLockVirtualMemory");
+    state.Api.ZwUnlockVirtualMemory = GetSystemRoutine(&state, L"ZwUnlockVirtualMemory");
 
     state.Api.KiServicesTab = (uint64_t*)GetModuleExport(state.Kernel, "NtImageInfo") + 3;
-    state.Api.ZwAlertThreadByThreadId = GetSyscall(&state, HashSyscall("AlertThreadByThreadId"));
-    state.Api.ZwWaitForAlertByThreadId = GetSyscall(&state, HashSyscall("WaitForAlertByThreadId"));
+    state.Api.NtAlertThreadByThreadId = GetSyscall(&state, HashSyscall("AlertThreadByThreadId"));
+    state.Api.NtWaitForAlertByThreadId = GetSyscall(&state, HashSyscall("WaitForAlertByThreadId"));
 
     uint8_t* MiGetPteAddress_Pattern = (uint8_t*)"\x48\xC1\xE9\x09\x48\xB8\x00\x00\x00\x00\x00\x00\x00\x00\x48\x23\xC8\x48\xB8\x00\x00\x00\x00\x00\x00\x00\x00\x48\x03\xC1\xC3";
     uint8_t* MiGetPteAddress_Mask = (uint8_t*)"xxxxxx????????xxxxx????????xxxx";
@@ -615,6 +655,8 @@ void comms_dispatch(comms_state_t* state, comms_header_t* header, size_t size) {
         case eCommsRestorePtes: comms_restore_ptes(state, (comms_restore_ptes_t*)header, size); break;
         case eCommsDuplicateHandle: comms_duplicate_handle(state, (comms_duplicate_handle_t*)header, size); break;
         case eCommsCloseHandle: comms_close_handle(state, (comms_close_handle_t*)header, size); break;
+        case eCommsMemLock: comms_mem_lock(state, (comms_mem_lock_t*)header, size); break;
+        case eCommsMemUnlock: comms_mem_unlock(state, (comms_mem_unlock_t*)header, size); break;
         }
     }
 

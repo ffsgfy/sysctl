@@ -58,6 +58,8 @@ public:
 	void* mem_alloc(size_t size, uint32_t type, uint32_t protect);
 	void mem_free(void** base, size_t* size, uint32_t type);
 	size_t mem_free(void* base, size_t size, uint32_t type);
+	bool mem_lock(void* base, size_t size);
+	bool mem_unlock(void* base, size_t size);
 	
 	bool replace_ptes(uint64_t src_process, void* src_base, uint64_t dst_process, void* dst_base, size_t size, void* original);
 	std::unique_ptr<uint64_t[]> replace_ptes(uint64_t src_process, void* src_base, uint64_t dst_process, void* dst_base, size_t size);

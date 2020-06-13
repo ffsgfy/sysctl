@@ -130,3 +130,15 @@ void comms_close_handle(uint64_t process, void* handle, comms_shared_t* shared) 
     comms_duplicate_handle_t msg = { { eCommsCloseHandle, 0 }, process, (uint64_t)(uintptr_t)handle };
     comms_dispatch(&msg.header, sizeof(msg), shared);
 }
+
+bool comms_mem_lock(uint64_t process, void* base, size_t size, comms_shared_t* shared) {
+    comms_mem_lock_t msg = { { eCommsMemLock, 0 }, process, (uint64_t)(uintptr_t)base, (uint64_t)size };
+    comms_dispatch(&msg.header, sizeof(msg), shared);
+    return (bool)msg.header.result;
+}
+
+bool comms_mem_unlock(uint64_t process, void* base, size_t size, comms_shared_t* shared) {
+    comms_mem_unlock_t msg = { { eCommsMemUnlock, 0 }, process, (uint64_t)(uintptr_t)base, (uint64_t)size };
+    comms_dispatch(&msg.header, sizeof(msg), shared);
+    return (bool)msg.header.result;
+}

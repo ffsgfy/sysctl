@@ -110,6 +110,14 @@ size_t Mmgr::mem_free(void* base, size_t size, uint32_t type) {
 	return mysize;
 }
 
+bool Mmgr::mem_lock(void* base, size_t size) {
+	return comms_mem_lock(m_process, base, size, &m_comms_shared);
+}
+
+bool Mmgr::mem_unlock(void* base, size_t size) {
+	return comms_mem_unlock(m_process, base, size, &m_comms_shared);
+}
+
 bool Mmgr::replace_ptes(uint64_t src_process, void* src_base, uint64_t dst_process, void* dst_base, size_t size, void* original) {
 	return comms_replace_ptes(src_process, src_base, dst_process, dst_base, size, original, &m_comms_shared);
 }

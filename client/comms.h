@@ -21,6 +21,8 @@ enum {
     eCommsRestorePtes,
     eCommsDuplicateHandle,
     eCommsCloseHandle,
+    eCommsMemLock,
+    eCommsMemUnlock,
 
     eCommsEnumSize
 };
@@ -138,6 +140,13 @@ typedef struct {
     uint64_t handle;
 } comms_close_handle_t;
 
+typedef struct {
+    comms_header_t header;
+    uint64_t process;
+    uint64_t base;
+    uint64_t size;
+} comms_mem_lock_t, comms_mem_unlock_t;
+
 void comms_dispatch(comms_header_t* msg, size_t size, comms_shared_t* shared);
 uint64_t comms_get_process(uint32_t process_id, comms_shared_t* shared);
 void comms_dereference(uint64_t object, comms_shared_t* shared);
@@ -154,3 +163,5 @@ bool comms_replace_ptes(uint64_t src_process, void* src_base, uint64_t dst_proce
 bool comms_restore_ptes(uint64_t process, void* base, size_t size, void* original, comms_shared_t* shared);
 void* comms_duplicate_handle(uint64_t process, void* handle, uint32_t access, uint32_t options, comms_shared_t* shared);
 void comms_close_handle(uint64_t process, void* handle, comms_shared_t* shared);
+bool comms_mem_lock(uint64_t process, void* base, size_t size, comms_shared_t* shared);
+bool comms_mem_unlock(uint64_t process, void* base, size_t size, comms_shared_t* shared);

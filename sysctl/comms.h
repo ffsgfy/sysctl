@@ -32,10 +32,13 @@ typedef NTSTATUS (NTAPI*ZwClose_t)(HANDLE Handle);
 typedef LARGE_INTEGER (NTAPI*KeQueryPerformanceCounter_t)(PLARGE_INTEGER PerformanceFrequency);
 typedef VOID (NTAPI*KeEnterCriticalRegion_t)(VOID);
 typedef VOID (NTAPI* KeLeaveCriticalRegion_t)(VOID);
+typedef NTSTATUS(NTAPI*ZwLockVirtualMemory_t)(HANDLE ProcessHandle, PVOID* BaseAddress, PSIZE_T RegionSize, ULONG MapType);
+typedef NTSTATUS(NTAPI*ZwUnlockVirtualMemory_t)(HANDLE ProcessHandle, PVOID* BaseAddress, PSIZE_T RegionSize, ULONG MapType);
+
+typedef NTSTATUS (NTAPI*NtAlertThreadByThreadId_t)(HANDLE ThreadId);
+typedef NTSTATUS (NTAPI*NtWaitForAlertByThreadId_t)(PVOID Address, UINT64* Milliseconds);
 
 typedef PMMPTE (NTAPI*MiGetPteAddress_t)(PVOID Address);
-typedef NTSTATUS (NTAPI*ZwAlertThreadByThreadId_t)(HANDLE ThreadId);
-typedef NTSTATUS (NTAPI*ZwWaitForAlertByThreadId_t)(PVOID Address, UINT64* Milliseconds);
 
 typedef struct {
     uint64_t Msg; // pointer to comms_header_t
@@ -88,10 +91,12 @@ typedef struct {
         KeQueryPerformanceCounter_t KeQueryPerformanceCounter;
         KeEnterCriticalRegion_t KeEnterCriticalRegion;
         KeLeaveCriticalRegion_t KeLeaveCriticalRegion;
+        ZwLockVirtualMemory_t ZwLockVirtualMemory;
+        ZwUnlockVirtualMemory_t ZwUnlockVirtualMemory;
 
         void* KiServicesTab;
-        ZwAlertThreadByThreadId_t ZwAlertThreadByThreadId;
-        ZwWaitForAlertByThreadId_t ZwWaitForAlertByThreadId;
+        NtAlertThreadByThreadId_t NtAlertThreadByThreadId;
+        NtWaitForAlertByThreadId_t NtWaitForAlertByThreadId;
 
         MiGetPteAddress_t MiGetPteAddress;
     } Api;
@@ -120,6 +125,8 @@ enum {
     eCommsRestorePtes,
     eCommsDuplicateHandle,
     eCommsCloseHandle,
+    eCommsMemLock,
+    eCommsMemUnlock,
 
     eCommsEnumSize
 };
@@ -220,5 +227,12 @@ typedef struct {
     uint64_t process; // target
     uint64_t handle;
 } comms_close_handle_t;
+
+typedef struct {
+    comms_header_t header;
+    uint64_t process;
+    uint64_t base;
+    uint64_t size;
+} comms_mem_lock_t, comms_mem_unlock_t;
 
 void comms_dispatch(comms_state_t* state, comms_header_t* header, size_t size);

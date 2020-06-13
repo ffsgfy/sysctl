@@ -10,6 +10,9 @@
 #define MI_HIGHEST_USER_ADDRESS 0x7FFFFFEFFFF
 #define MM_USER_PROBE_ADDRESS 0x7FFFFFFF0000
 
+#define MAP_PROCESS 1
+#define MAP_SYSTEM 2
+
 typedef struct _MMPTE_SOFTWARE {
     ULONG64 Valid : 1;
     ULONG64 PageFileLow : 4;
