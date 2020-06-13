@@ -110,24 +110,41 @@ size_t Mmgr::mem_free(void* base, size_t size, uint32_t type) {
 	return mysize;
 }
 
-bool Mmgr::replace_ptes(void* src, void* dst, size_t size, void* original) {
-	return comms_replace_ptes(m_process, src, dst, size, original, &m_comms_shared);
+bool Mmgr::replace_ptes(uint64_t src_process, void* src_base, uint64_t dst_process, void* dst_base, size_t size, void* original) {
+	return comms_replace_ptes(src_process, src_base, dst_process, dst_base, size, original, &m_comms_shared);
 }
 
-std::unique_ptr<uint64_t[]> Mmgr::replace_ptes(void* src, void* dst, size_t size) {
-	std::unique_ptr<uint64_t[]> original(new uint64_t[NumberOfPages((uintptr_t)src, size)]);
-	if (!replace_ptes(src, dst, size, original.get())) {
+std::unique_ptr<uint64_t[]> Mmgr::replace_ptes(uint64_t src_process, void* src_base, uint64_t dst_process, void* dst_base, size_t size) {
+	std::unique_ptr<uint64_t[]> original(new uint64_t[NumberOfPages((uintptr_t)src_base, size)]);
+	if (!replace_ptes(src_process, src_base, dst_process, dst_base, size, original.get())) {
 		original.reset();
 	}
+
 	return original;
 }
 
-bool Mmgr::restore_ptes(void* base, size_t size, void* original) {
-	return comms_restore_ptes(m_process, base, size, original, &m_comms_shared);
+std::unique_ptr<uint64_t[]> Mmgr::give_ptes(void* src, void* dst, size_t size) {
+	return replace_ptes(0, src, m_process, dst, size);
 }
 
-bool Mmgr::restore_ptes(void* base, size_t size, std::unique_ptr<uint64_t[]>& original) {
-	return restore_ptes(base, size, original.get());
+std::unique_ptr<uint64_t[]> Mmgr::take_ptes(void* src, void* dst, size_t size) {
+	return replace_ptes(m_process, src, 0, dst, size);
+}
+
+bool Mmgr::restore_ptes(void* base, size_t size, void* original, bool self) {
+	return comms_restore_ptes((self ? 0 : m_process), base, size, original, &m_comms_shared);
+}
+
+bool Mmgr::restore_ptes(void* base, size_t size, std::unique_ptr<uint64_t[]>& original, bool free_original, bool self) {
+	if (restore_ptes(base, size, original.get(), self)) {
+		if (free_original) {
+			original.reset();
+		}
+
+		return true;
+	}
+
+	return false;
 }
 
 void* Mmgr::duplicate_handle(void* handle, uint32_t access, uint32_t options) {

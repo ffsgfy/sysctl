@@ -191,19 +191,20 @@ typedef struct {
 
 typedef struct {
     comms_header_t header;
-    uint64_t process;
-    uint64_t src;
-    uint64_t dst;
+    uint64_t src_process;
+    uint64_t src_base; // page-aligned
+    uint64_t dst_process;
+    uint64_t dst_base; // page-aligned
     uint64_t size;
-    uint64_t original; // pointer to buffer
+    uint64_t original; // pointer to buffer in current process
 } comms_replace_ptes_t;
 
 typedef struct {
     comms_header_t header;
     uint64_t process;
-    uint64_t base;
+    uint64_t base; // page-aligned
     uint64_t size;
-    uint64_t original; // pointer to buffer
+    uint64_t original; // pointer to buffer in current process
 } comms_restore_ptes_t;
 
 typedef struct {

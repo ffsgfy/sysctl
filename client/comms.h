@@ -108,19 +108,20 @@ typedef struct {
 
 typedef struct {
     comms_header_t header;
-    uint64_t process;
-    uint64_t src;
-    uint64_t dst;
+    uint64_t src_process;
+    uint64_t src_base; // page-aligned
+    uint64_t dst_process;
+    uint64_t dst_base; // page-aligned
     uint64_t size;
-    uint64_t original; // pointer to buffer
+    uint64_t original; // pointer to buffer in current process
 } comms_replace_ptes_t;
 
 typedef struct {
     comms_header_t header;
     uint64_t process;
-    uint64_t base;
+    uint64_t base; // page-aligned
     uint64_t size;
-    uint64_t original; // pointer to buffer
+    uint64_t original; // pointer to buffer in current process
 } comms_restore_ptes_t;
 
 typedef struct {
@@ -149,7 +150,7 @@ void comms_heartbeat(comms_shared_t* shared);
 void comms_get_module(uint64_t process, const wchar_t* module, void** module_base, size_t* module_size, comms_shared_t* shared);
 void comms_mem_alloc(uint64_t process, void** base, size_t* size, uint32_t type, uint32_t protect, comms_shared_t* shared);
 void comms_mem_free(uint64_t process, void** base, size_t* size, uint32_t type, comms_shared_t* shared);
-bool comms_replace_ptes(uint64_t process, void* src, void* dst, size_t size, void* original, comms_shared_t* shared);
+bool comms_replace_ptes(uint64_t src_process, void* src_base, uint64_t dst_process, void* dst_base, size_t size, void* original, comms_shared_t* shared);
 bool comms_restore_ptes(uint64_t process, void* base, size_t size, void* original, comms_shared_t* shared);
 void* comms_duplicate_handle(uint64_t process, void* handle, uint32_t access, uint32_t options, comms_shared_t* shared);
 void comms_close_handle(uint64_t process, void* handle, comms_shared_t* shared);

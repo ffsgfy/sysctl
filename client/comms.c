@@ -108,8 +108,8 @@ void comms_mem_free(uint64_t process, void** base, size_t* size, uint32_t type, 
     *size = msg.size;
 }
 
-bool comms_replace_ptes(uint64_t process, void* src, void* dst, size_t size, void* original, comms_shared_t* shared) {
-    comms_replace_ptes_t msg = { { eCommsReplacePtes, 0 }, process, (uint64_t)src, (uint64_t)dst, (uint64_t)size, (uint64_t)original };
+bool comms_replace_ptes(uint64_t src_process, void* src_base, uint64_t dst_process, void* dst_base, size_t size, void* original, comms_shared_t* shared) {
+    comms_replace_ptes_t msg = { { eCommsReplacePtes, 0 }, src_process, (uint64_t)src_base, dst_process, (uint64_t)dst_base, (uint64_t)size, (uint64_t)original };
     comms_dispatch(&msg.header, sizeof(msg), shared);
     return (bool)msg.header.result;
 }

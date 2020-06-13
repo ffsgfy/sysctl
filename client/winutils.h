@@ -8,6 +8,10 @@
 #define PAGE_SIZE 0x1000
 #define PAGE_SHIFT 12
 
+#define CONCAT_DIRECT(a, b) a ## b
+#define CONCAT(a, b) CONCAT_DIRECT(a, b)
+#define PAD(n) unsigned __int8 CONCAT( _pad , __LINE__ ) [ n ]
+
 typedef enum _SYSTEM_INFO_CLASS {
     SystemBasicInformation,
     SystemProcessorInformation,

@@ -58,7 +58,7 @@ int main1() {
                 if (VirtualLock(local_base, 200)) {
                     printf("Lock success\n");
 
-                    auto orig_ptes = mmgr.replace_ptes(local_base, remote_base, 200);
+                    auto orig_ptes = mmgr.give_ptes(local_base, remote_base, 200);
                     if (orig_ptes.get()) {
                         printf("Pte replacement success\n");
                         system("timeout 300");

@@ -27,9 +27,6 @@
     <ClCompile Include="mmgr.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="asignal.c">
-      <Filter>Source Files</Filter>
-    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="winutils.h">
@@ -39,9 +36,6 @@
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="comms.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="asignal.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>

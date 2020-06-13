@@ -162,13 +162,13 @@ VOID ProcessMemFree(comms_state_t* state, PEPROCESS Process, PVOID* Base, PSIZE_
     state->Api.KeUnstackDetachProcess(&ApcState);
 }
 
-BOOL ReplacePtes(comms_state_t* state, PEPROCESS Process, PVOID Src, PVOID Dst, SIZE_T Size, PVOID Original) {
+BOOL ReplacePtes(comms_state_t* state, PEPROCESS SrcProcess, PVOID SrcBase, PEPROCESS DstProcess, PVOID DstBase, SIZE_T Size, PVOID Original) {
     BOOL Result = FALSE;
     KAPC_STATE ApcState;
     HANDLE Memory;
 
     if (state->Api.MiGetPteAddress) {
-        SIZE_T nPages = NumberOfPages((ULONG_PTR)Src, Size);
+        SIZE_T nPages = NumberOfPages((ULONG_PTR)SrcBase, Size);
         SIZE_T BufferSize = nPages * sizeof(MMPTE);
 
         if ((Memory = state->Api.MmSecureVirtualMemory(Original, BufferSize, PAGE_READWRITE))) {
@@ -177,22 +177,24 @@ BOOL ReplacePtes(comms_state_t* state, PEPROCESS Process, PVOID Src, PVOID Dst, 
                 ULONG_PTR Address;
                 SIZE_T Page;
 
-                // New -> Buffer
-                for (Page = 0, Address = (ULONG_PTR)Src; Page < nPages; ++Page, Address += PAGE_SIZE) {
+                // Src -> Buffer
+                if (SrcProcess) { state->Api.KeStackAttachProcess(SrcProcess, &ApcState); }
+                for (Page = 0, Address = (ULONG_PTR)SrcBase; Page < nPages; ++Page, Address += PAGE_SIZE) {
                     Buffer[Page] = *state->Api.MiGetPteAddress((PVOID)Address);
                 }
+                if (SrcProcess) { state->Api.KeUnstackDetachProcess(&ApcState); }
 
-                // Buffer (New) <-> Old
-                state->Api.KeStackAttachProcess(Process, &ApcState);
-                for (Page = 0, Address = (ULONG_PTR)Dst; Page < nPages; ++Page, Address += PAGE_SIZE) {
-                    PMMPTE pPte = state->Api.MiGetPteAddress((PVOID)Address);
+                // Buffer <-> Dst
+                if (DstProcess) { state->Api.KeStackAttachProcess(DstProcess, &ApcState); }
+                for (Page = 0, Address = (ULONG_PTR)DstBase; Page < nPages; ++Page, Address += PAGE_SIZE) {
+                    MMPTE* pPte = state->Api.MiGetPteAddress((PVOID)Address);
                     MMPTE Pte = *pPte;
                     *pPte = Buffer[Page];
                     Buffer[Page] = Pte;
                 }
-                state->Api.KeUnstackDetachProcess(&ApcState);
+                if (DstProcess) { state->Api.KeUnstackDetachProcess(&ApcState); }
 
-                // Buffer (Old) -> Original
+                // Buffer -> Original
                 state->Api.RtlCopyMemory(Original, Buffer, BufferSize);
 
                 Result = TRUE;
@@ -220,15 +222,15 @@ BOOL RestorePtes(comms_state_t* state, PEPROCESS Process, PVOID Base, SIZE_T Siz
                 ULONG_PTR Address;
                 SIZE_T Page;
 
-                // Original (Old) -> Buffer
+                // Original -> Buffer
                 state->Api.RtlCopyMemory(Buffer, Original, BufferSize);
 
-                // Buffer (Old) -> New
-                state->Api.KeStackAttachProcess(Process, &ApcState);
+                // Buffer -> Base
+                if (Process) { state->Api.KeStackAttachProcess(Process, &ApcState); }
                 for (Page = 0, Address = (ULONG_PTR)Base; Page < nPages; ++Page, Address += PAGE_SIZE) {
                     *state->Api.MiGetPteAddress((PVOID)Address) = Buffer[Page];
                 }
-                state->Api.KeUnstackDetachProcess(&ApcState);
+                if (Process) { state->Api.KeUnstackDetachProcess(&ApcState); }
 
                 Result = TRUE;
             }
@@ -466,7 +468,7 @@ void comms_replace_ptes(comms_state_t* state, comms_replace_ptes_t* msg, size_t 
         return;
     }
 
-    msg->header.result = (uint64_t)ReplacePtes(state, (void*)msg->process, (void*)msg->src, (void*)msg->dst, msg->size, (void*)msg->original);
+    msg->header.result = (uint64_t)ReplacePtes(state, (void*)msg->src_process, (void*)msg->src_base, (void*)msg->dst_process, (void*)msg->dst_base, msg->size, (void*)msg->original);
 }
 
 void comms_restore_ptes(comms_state_t* state, comms_restore_ptes_t* msg, size_t size) {

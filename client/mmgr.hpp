@@ -1,11 +1,11 @@
 #pragma once
 
-extern "C" {
-#include "comms.h"
-}
 #include <mutex>
 #include <thread>
 #include <memory>
+extern "C" {
+#include "comms.h"
+}
 
 class Mmgr {
 private:
@@ -59,10 +59,12 @@ public:
 	void mem_free(void** base, size_t* size, uint32_t type);
 	size_t mem_free(void* base, size_t size, uint32_t type);
 	
-	bool replace_ptes(void* src, void* dst, size_t size, void* original);
-	std::unique_ptr<uint64_t[]> replace_ptes(void* src, void* dst, size_t size);
-	bool restore_ptes(void* base, size_t size, void* original);
-	bool restore_ptes(void* base, size_t size, std::unique_ptr<uint64_t[]>& original);
+	bool replace_ptes(uint64_t src_process, void* src_base, uint64_t dst_process, void* dst_base, size_t size, void* original);
+	std::unique_ptr<uint64_t[]> replace_ptes(uint64_t src_process, void* src_base, uint64_t dst_process, void* dst_base, size_t size);
+	std::unique_ptr<uint64_t[]> give_ptes(void* src, void* dst, size_t size);
+	std::unique_ptr<uint64_t[]> take_ptes(void* src, void* dst, size_t size);
+	bool restore_ptes(void* base, size_t size, void* original, bool self = false);
+	bool restore_ptes(void* base, size_t size, std::unique_ptr<uint64_t[]>& original, bool free_original = false, bool self = false);
 
 	void* duplicate_handle(void* handle, uint32_t access, uint32_t options);
 	void close_handle(void* handle);
