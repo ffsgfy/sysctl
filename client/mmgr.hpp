@@ -3,6 +3,8 @@
 #include <mutex>
 #include <thread>
 #include <memory>
+#include <vector>
+#include <chrono>
 extern "C" {
 #include "comms.h"
 }
@@ -17,12 +19,19 @@ public:
 
 	uint32_t get_process_id() const { return m_process_id; }
 	uint64_t get_process() const { return m_process; }
+	comms_shared_t* get_shared() { return &m_comms_shared; }
 
 	bool attach(uint32_t process_id);
 	bool attach(const wchar_t* process_name);
 	void heartbeat();
 	void detach();
 	void stop(); // this invalidates the object
+
+	void sleep(uint64_t interval);
+	template<typename Rep, typename Period>
+	void sleep(std::chrono::duration<Rep, Period> interval) {
+		sleep(std::chrono::duration_cast<std::chrono::nanoseconds>(interval).count() / 100);
+	}
 
 	template<typename T>
 	T read(void* src) {
@@ -49,10 +58,18 @@ public:
 		comms_write(m_process, (void*)src, dst, size, &m_comms_shared);
 	}
 
-	void get_module(const wchar_t* module, void** module_base, size_t* module_size);
+	template<typename T>
+	void force_write(const T& src, void* dst) {
+		comms_force_write(m_process, (void*)&src, dst, sizeof(T), &m_comms_shared);
+	}
+
+	void force_write(const void* src, void* dst, size_t size) {
+		comms_force_write(m_process, (void*)src, dst, size, &m_comms_shared);
+	}
+
 	void* find_pattern(void* start, size_t size, const char* pattern, const char* mask);
-	void* find_pattern(const wchar_t* module, const char* pattern, const char* mask);
-	
+	void* get_peb();
+
 	void mem_alloc(void** base, size_t* size, uint32_t type, uint32_t protect);
 	size_t mem_alloc(void* base, size_t size, uint32_t type, uint32_t protect);
 	void* mem_alloc(size_t size, uint32_t type, uint32_t protect);
@@ -60,6 +77,7 @@ public:
 	size_t mem_free(void* base, size_t size, uint32_t type);
 	bool mem_lock(void* base, size_t size);
 	bool mem_unlock(void* base, size_t size);
+	bool mem_query(void* base, comms_mem_info_t* info);
 	
 	bool replace_ptes(uint64_t src_process, void* src_base, uint64_t dst_process, void* dst_base, size_t size, void* original);
 	std::unique_ptr<uint64_t[]> replace_ptes(uint64_t src_process, void* src_base, uint64_t dst_process, void* dst_base, size_t size);

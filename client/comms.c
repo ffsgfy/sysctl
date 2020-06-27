@@ -20,7 +20,7 @@ void comms_dispatch(comms_header_t* msg, size_t size, comms_shared_t* shared) {
     }
 
     do {
-        NtWaitForAlertByThreadId(&(shared->km.signal), INFINITE);
+        NtWaitForAlertByThreadId(&(shared->km.signal), 0);
     } while (!(shared->km.signal));
     shared->km.signal = 0;
 }
@@ -87,13 +87,6 @@ void comms_heartbeat(comms_shared_t* shared) {
     comms_dispatch(&msg, sizeof(msg), shared);
 }
 
-void comms_get_module(uint64_t process, const wchar_t* module, void** module_base, size_t* module_size, comms_shared_t* shared) {
-    comms_get_module_t msg = { { eCommsGetModule, 0 }, process, u_hash16(module, wcslen(module)), 0, 0 };
-    comms_dispatch(&msg.header, sizeof(msg), shared);
-    *module_base = (void*)(uintptr_t)msg.module_base;
-    *module_size = (size_t)msg.module_size;
-}
-
 void comms_mem_alloc(uint64_t process, void** base, size_t* size, uint32_t type, uint32_t protect, comms_shared_t* shared) {
     comms_mem_alloc_t msg = { { eCommsMemAlloc, 0 }, process, (uint64_t)*base, (uint64_t)*size, type, protect };
     comms_dispatch(&msg.header, sizeof(msg), shared);
@@ -140,5 +133,28 @@ bool comms_mem_lock(uint64_t process, void* base, size_t size, comms_shared_t* s
 bool comms_mem_unlock(uint64_t process, void* base, size_t size, comms_shared_t* shared) {
     comms_mem_unlock_t msg = { { eCommsMemUnlock, 0 }, process, (uint64_t)(uintptr_t)base, (uint64_t)size };
     comms_dispatch(&msg.header, sizeof(msg), shared);
+    return (bool)msg.header.result;
+}
+
+void comms_force_write(uint64_t process, void* src, void* dst, size_t size, comms_shared_t* shared) {
+    comms_write_t msg = { { eCommsForceWrite, 0 }, process, (uint64_t)src, (uint64_t)(uintptr_t)dst, (uint64_t)size };
+    comms_dispatch(&msg.header, sizeof(msg), shared);
+}
+
+void comms_sleep(uint64_t interval, comms_shared_t* shared) {
+    comms_sleep_t msg = { { eCommsSleep, 0 }, interval };
+    comms_dispatch(&msg.header, sizeof(msg), shared);
+}
+
+void* comms_get_peb(uint64_t process, comms_shared_t* shared) {
+    comms_get_peb_t msg = { { eCommsGetPeb, 0 }, process };
+    comms_dispatch(&msg.header, sizeof(msg), shared);
+    return (void*)(uintptr_t)msg.header.result;
+}
+
+bool comms_mem_query(uint64_t process, void* base, comms_mem_info_t* info, comms_shared_t* shared) {
+    comms_mem_query_t msg = { { eCommsMemQuery, 0 }, *info, process, (uint64_t)(uintptr_t)base };
+    comms_dispatch(&msg.header, sizeof(msg), shared);
+    *info = msg.info;
     return (bool)msg.header.result;
 }

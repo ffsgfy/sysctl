@@ -30,6 +30,8 @@ typedef INT NTSTATUS, POOL_TYPE;
 typedef LONG HRESULT;
 typedef ULONG_PTR SIZE_T, * PSIZE_T;
 typedef WORD LANGID;
+typedef ULONG_PTR KAFFINITY, * PKAFFINITY;
+typedef ULONG PFN_NUMBER, * PPFN_NUMBER;
 
 #define NT_SUCCESS(Status) (((NTSTATUS)(Status)) >= 0)
 
@@ -458,3 +460,70 @@ typedef struct _PEB
     ULONG AtlThunkSListPtr32;
     PVOID ApiSetMap;
 } PEB, * PPEB;
+
+typedef struct _PROCESSOR_NUMBER {
+    USHORT Group;
+    UCHAR Number;
+    UCHAR Reserved;
+} PROCESSOR_NUMBER, * PPROCESSOR_NUMBER;
+
+typedef struct _GROUP_AFFINITY {
+    KAFFINITY Mask;
+    USHORT Group;
+    USHORT Reserved[3];
+} GROUP_AFFINITY, * PGROUP_AFFINITY;
+
+typedef struct _MDL {
+    struct _MDL* Next;
+    SHORT Size;
+    SHORT MdlFlags;
+    USHORT AllocationProcessorNumber;
+    USHORT Reserved;
+    PEPROCESS Process;
+    PVOID MappedSystemVa;
+    PVOID StartVa;
+    ULONG ByteCount;
+    ULONG ByteOffset;
+} MDL, * PMDL;
+
+typedef enum _MEMORY_CACHING_TYPE {
+    MmNonCached = 0,
+    MmCached = 1,
+    MmWriteCombined = 2,
+    MmHardwareCoherentCached = 3,
+    MmNonCachedUnordered = 4,
+    MmUSWCCached = 5,
+    MmMaximumCacheType = 6,
+    MmNotMapped = -1
+} MEMORY_CACHING_TYPE;
+
+typedef enum _LOCK_OPERATION {
+    IoReadAccess,
+    IoWriteAccess,
+    IoModifyAccess
+} LOCK_OPERATION;
+
+typedef enum _MM_PAGE_PRIORITY {
+    LowPagePriority = 0,
+    NormalPagePriority = 16,
+    HighPagePriority = 32
+} MM_PAGE_PRIORITY;
+
+typedef enum _MEMORY_INFORMATION_CLASS {
+    MemoryBasicInformation,
+    MemoryWorkingSetList,
+    MemorySectionName,
+    MemoryBasicVlmInformation,
+    MemoryWorkingSetExList
+} MEMORY_INFORMATION_CLASS;
+
+typedef struct _MEMORY_BASIC_INFORMATION {
+    PVOID BaseAddress;
+    PVOID AllocationBase;
+    ULONG AllocationProtect;
+    USHORT PartitionId;
+    SIZE_T RegionSize;
+    ULONG State;
+    ULONG Protect;
+    ULONG Type;
+} MEMORY_BASIC_INFORMATION, * PMEMORY_BASIC_INFORMATION;

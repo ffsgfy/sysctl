@@ -12,6 +12,8 @@
 #define CONCAT(a, b) CONCAT_DIRECT(a, b)
 #define PAD(n) unsigned __int8 CONCAT( _pad , __LINE__ ) [ n ]
 
+#define RVA_TO_VA(Base, Offset) ((uintptr_t)(Base) + (Offset))
+
 typedef enum _SYSTEM_INFO_CLASS {
     SystemBasicInformation,
     SystemProcessorInformation,
@@ -167,6 +169,11 @@ typedef enum _PROCESS_INFO_CLASS {
     MaxProcessInfoClass
 } PROCESS_INFO_CLASS;
 
+typedef enum _SECTION_INHERIT {
+    ViewShare = 1,
+    ViewUnmap = 2
+} SECTION_INHERIT;
+
 typedef struct _ANSI_STRING
 {
     USHORT Length;
@@ -189,8 +196,11 @@ EXTERN_C_START
 NTSYSAPI NTSTATUS NTAPI NtSetSystemEnvironmentValueEx(UNICODE_STRING* VariableName, GUID* VendorGuid, PVOID Value, ULONG ValueLength, ULONG Attributes);
 NTSYSAPI NTSTATUS NTAPI RtlAdjustPrivilege(ULONG Privilege, BOOLEAN Enable, BOOLEAN Client, BOOLEAN* WasEnabled);
 NTSYSAPI NTSTATUS NTAPI NtQuerySystemInformation(SYSTEM_INFO_CLASS SystemInformationClass, PVOID SystemInformation, ULONG SystemInformationLength, PULONG ReturnLength);
-NTSYSAPI NTSTATUS NTAPI NtWaitForAlertByThreadId(PVOID Address, DWORD Milliseconds);
+NTSYSAPI NTSTATUS NTAPI NtWaitForAlertByThreadId(PVOID Address, int64_t* Timeout);
 NTSYSAPI NTSTATUS NTAPI NtAlertThreadByThreadId(HANDLE ThreadId);
+NTSYSAPI NTSTATUS NTAPI NtCreateSection(PHANDLE SectionHandle, ACCESS_MASK DesiredAccess, PVOID ObjectAttributes, PLARGE_INTEGER MaximumSize, ULONG SectionPageProtection, ULONG AllocationAttributes, HANDLE FileHandle);
+NTSYSAPI NTSTATUS NTAPI NtMapViewOfSection(HANDLE SectionHandle, HANDLE ProcessHandle, PVOID* BaseAddress, ULONG_PTR ZeroBits, SIZE_T CommitSize, PLARGE_INTEGER SectionOffset, PSIZE_T ViewSize, SECTION_INHERIT InheritDisposition, ULONG AllocationType, ULONG Win32Protect);
+NTSYSAPI NTSTATUS NTAPI NtUnmapViewOfSection(HANDLE ProcessHandle, PVOID BaseAddress);
 EXTERN_C_END
 
 typedef struct _SYSTEM_MODULE_ENTRY

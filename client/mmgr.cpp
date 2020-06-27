@@ -3,7 +3,7 @@ extern "C" {
 #include "winutils.h"
 }
 
-Mmgr* g_Mmgr;
+Mmgr* g_Mmgr = nullptr;
 
 Mmgr::Mmgr() {
 	std::lock_guard<lock_t> lock_guard(m_lock);
@@ -12,7 +12,8 @@ Mmgr::Mmgr() {
 	unsigned long kernel_size = 0;
 	GetSystemModule("ntoskrnl.exe", (void**)&kernel_base, &kernel_size);
 	if (kernel_base && kernel_size) {
-		m_comms_shared.timeout = 5000;
+		m_comms_shared.timeout = 10000; // milliseconds
+		m_comms_shared.timeout *= -10000;
 		m_comms_shared.um.signal = 0;
 		m_comms_shared.um.thread_id = (uint64_t)GetCurrentThreadId();
 		m_comms_thread = std::thread(comms_init, kernel_base, kernel_size, &m_comms_shared);
@@ -64,24 +65,16 @@ void Mmgr::stop() {
 	}
 }
 
-void Mmgr::get_module(const wchar_t* module, void** module_base, size_t* module_size) {
-	comms_get_module(m_process, module, module_base, module_size, &m_comms_shared);
+void Mmgr::sleep(uint64_t interval) {
+	comms_sleep(interval, &m_comms_shared);
 }
 
 void* Mmgr::find_pattern(void* start, size_t size, const char* pattern, const char* mask) {
 	return comms_find_pattern(m_process, start, size, pattern, mask, &m_comms_shared);
 }
 
-void* Mmgr::find_pattern(const wchar_t* module, const char* pattern, const char* mask) {
-	void* module_base = 0;
-	size_t module_size = 0;
-
-	get_module(module, &module_base, &module_size);
-	if (module_base) {
-		return find_pattern(module_base, module_size, pattern, mask);
-	}
-
-	return nullptr;
+void* Mmgr::get_peb() {
+	return comms_get_peb(m_process, &m_comms_shared);
 }
 
 void Mmgr::mem_alloc(void** base, size_t* size, uint32_t type, uint32_t protect) {
@@ -116,6 +109,10 @@ bool Mmgr::mem_lock(void* base, size_t size) {
 
 bool Mmgr::mem_unlock(void* base, size_t size) {
 	return comms_mem_unlock(m_process, base, size, &m_comms_shared);
+}
+
+bool Mmgr::mem_query(void* base, comms_mem_info_t* info) {
+	return comms_mem_query(m_process, base, info, &m_comms_shared);
 }
 
 bool Mmgr::replace_ptes(uint64_t src_process, void* src_base, uint64_t dst_process, void* dst_base, size_t size, void* original) {

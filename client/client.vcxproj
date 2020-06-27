@@ -151,13 +151,20 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="comms.c" />
+    <ClCompile Include="conf.cpp" />
     <ClCompile Include="main.cpp" />
     <ClCompile Include="mmgr.cpp" />
+    <ClCompile Include="mmgrx.cpp" />
+    <ClCompile Include="ptr.cpp" />
     <ClCompile Include="winutils.c" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="comms.h" />
+    <ClInclude Include="conf.hpp" />
     <ClInclude Include="mmgr.hpp" />
+    <ClInclude Include="mmgrx.hpp" />
+    <ClInclude Include="ntx.hpp" />
+    <ClInclude Include="ptr.hpp" />
     <ClInclude Include="winutils.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />

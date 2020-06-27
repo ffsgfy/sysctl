@@ -6,6 +6,8 @@
 #define RVA_TO_VA(Base, Offset) ((UINT_PTR)(Base) + (Offset))
 #define BUFFER_MAX_SIZE 1048576 // 1 MB
 
+int _fltused = 0; // lul
+
 PVOID GetModuleExport(PVOID Module, PCHAR Symbol) {
     PIMAGE_DOS_HEADER DosHeader = (PIMAGE_DOS_HEADER)Module;
     PIMAGE_NT_HEADERS NtHeaders = (PIMAGE_NT_HEADERS)RVA_TO_VA(Module, DosHeader->e_lfanew);
@@ -32,43 +34,20 @@ PVOID GetModuleExport(PVOID Module, PCHAR Symbol) {
     return NULL;
 }
 
-VOID GetProcessModule(comms_state_t* state, PEPROCESS Process, UINT64 Module, PVOID* ModuleBase, ULONG* ModuleSize) {
-    KAPC_STATE ApcState;
-    PEPROCESS CurrentProcess = state->Api.IoGetCurrentProcess();
-
-    if (Process != CurrentProcess) {
-        state->Api.KeStackAttachProcess(Process, &ApcState);
-    }
-
-    PPEB Peb = state->Api.PsGetProcessPeb(Process);
-    if (Peb) {
-        PLIST_ENTRY ListHead = &Peb->Ldr->InLoadOrderModuleList;
-        PLIST_ENTRY ListEntry = ListHead->Flink;
-
-        while (ListEntry && ListEntry != ListHead) {
-            PLDR_DATA_TABLE_ENTRY Entry = (PLDR_DATA_TABLE_ENTRY)ListEntry;
-            UINT64 EntryHash = u_hash16(Entry->BaseDllName.Buffer, Entry->BaseDllName.Length / sizeof(uint16_t));
-
-            if (EntryHash == Module) {
-                if (ModuleBase) {
-                    *ModuleBase = Entry->DllBase;
-                }
-
-                if (ModuleSize) {
-                    *ModuleSize = Entry->SizeOfImage;
-                }
-
-                break;
-            }
-
-            ListEntry = ListEntry->Flink;
-        }
-    }
-
-    if (Process != CurrentProcess) {
-        state->Api.KeUnstackDetachProcess(&ApcState);
+VOID ProcessAttach(comms_state_t* state, PEPROCESS Process, PKAPC_STATE ApcState) {
+    if (Process) {
+        state->Api.KeStackAttachProcess(Process, ApcState);
     }
 }
+
+VOID ProcessDetach(comms_state_t* state, PEPROCESS Process, PKAPC_STATE ApcState) {
+    if (Process) {
+        state->Api.KeUnstackDetachProcess(ApcState);
+    }
+}
+
+#define ATTACH(Process, ApcState) ProcessAttach(state, (Process), (ApcState))
+#define DETACH(Process, ApcState) ProcessDetach(state, (Process), (ApcState))
 
 PVOID AllocatePool(comms_state_t* state, POOL_TYPE Type, SIZE_T Size) {
     return state->Api.ExAllocatePoolWithTag(Type, Size, 0);
@@ -109,12 +88,12 @@ VOID ProcessRead(comms_state_t* state, PEPROCESS Process, PVOID Src, PVOID Dst, 
 
     if (EnsureBuffer(state, Size)) {
         if (EnsureUserMode(Src, Size) && EnsureUserMode(Dst, Size)) { // No kernel-mode r/w
-            state->Api.KeStackAttachProcess(Process, &ApcState);
+            ATTACH(Process, &ApcState);
             if ((Memory = state->Api.MmSecureVirtualMemory(Src, Size, PAGE_READONLY))) {
                 state->Api.RtlCopyMemory(state->Buffer.Ptr, Src, Size); // Src -> Buffer
                 state->Api.MmUnsecureVirtualMemory(Memory);
             }
-            state->Api.KeUnstackDetachProcess(&ApcState);
+            DETACH(Process, &ApcState);
 
             if (Memory && (Memory = state->Api.MmSecureVirtualMemory(Dst, Size, PAGE_READWRITE))) {
                 state->Api.RtlCopyMemory(Dst, state->Buffer.Ptr, Size); // Buffer -> Dst
@@ -136,12 +115,12 @@ VOID ProcessWrite(comms_state_t* state, PEPROCESS Process, PVOID Src, PVOID Dst,
                 state->Api.MmUnsecureVirtualMemory(Memory);
             }
 
-            state->Api.KeStackAttachProcess(Process, &ApcState);
+            ATTACH(Process, &ApcState);
             if (Memory && (Memory = state->Api.MmSecureVirtualMemory(Dst, Size, PAGE_READWRITE))) {
                 state->Api.RtlCopyMemory(Dst, state->Buffer.Ptr, Size); // Buffer -> Dst
                 state->Api.MmUnsecureVirtualMemory(Memory);
             }
-            state->Api.KeUnstackDetachProcess(&ApcState);
+            DETACH(Process, &ApcState);
         }
     }
 }
@@ -149,17 +128,17 @@ VOID ProcessWrite(comms_state_t* state, PEPROCESS Process, PVOID Src, PVOID Dst,
 VOID ProcessMemAlloc(comms_state_t* state, PEPROCESS Process, PVOID* Base, PSIZE_T Size, ULONG Type, ULONG Protect) {
     KAPC_STATE ApcState;
 
-    state->Api.KeStackAttachProcess(Process, &ApcState);
+    ATTACH(Process, &ApcState);
     state->Api.ZwAllocateVirtualMemory(NtCurrentProcess(), Base, 0, Size, Type, Protect);
-    state->Api.KeUnstackDetachProcess(&ApcState);
+    DETACH(Process, &ApcState);
 }
 
 VOID ProcessMemFree(comms_state_t* state, PEPROCESS Process, PVOID* Base, PSIZE_T Size, ULONG Type) {
     KAPC_STATE ApcState;
 
-    state->Api.KeStackAttachProcess(Process, &ApcState);
+    ATTACH(Process, &ApcState);
     state->Api.ZwFreeVirtualMemory(NtCurrentProcess(), Base, Size, Type);
-    state->Api.KeUnstackDetachProcess(&ApcState);
+    DETACH(Process, &ApcState);
 }
 
 BOOL ReplacePtes(comms_state_t* state, PEPROCESS SrcProcess, PVOID SrcBase, PEPROCESS DstProcess, PVOID DstBase, SIZE_T Size, PVOID Original) {
@@ -178,21 +157,22 @@ BOOL ReplacePtes(comms_state_t* state, PEPROCESS SrcProcess, PVOID SrcBase, PEPR
                 SIZE_T Page;
 
                 // Src -> Buffer
-                if (SrcProcess) { state->Api.KeStackAttachProcess(SrcProcess, &ApcState); }
+                ATTACH(SrcProcess, &ApcState);
                 for (Page = 0, Address = (ULONG_PTR)SrcBase; Page < nPages; ++Page, Address += PAGE_SIZE) {
                     Buffer[Page] = *state->Api.MiGetPteAddress((PVOID)Address);
                 }
-                if (SrcProcess) { state->Api.KeUnstackDetachProcess(&ApcState); }
+                DETACH(SrcProcess, &ApcState);
 
                 // Buffer <-> Dst
-                if (DstProcess) { state->Api.KeStackAttachProcess(DstProcess, &ApcState); }
+                ATTACH(DstProcess, &ApcState);
                 for (Page = 0, Address = (ULONG_PTR)DstBase; Page < nPages; ++Page, Address += PAGE_SIZE) {
                     MMPTE* pPte = state->Api.MiGetPteAddress((PVOID)Address);
                     MMPTE Pte = *pPte;
-                    *pPte = Buffer[Page];
+                    // pPte->u.Hard.PageFrameNumber = Buffer[Page].u.Hard.PageFrameNumber;
+                    pPte->u.Long = Buffer[Page].u.Long;
                     Buffer[Page] = Pte;
                 }
-                if (DstProcess) { state->Api.KeUnstackDetachProcess(&ApcState); }
+                DETACH(DstProcess, &ApcState);
 
                 // Buffer -> Original
                 state->Api.RtlCopyMemory(Original, Buffer, BufferSize);
@@ -226,11 +206,11 @@ BOOL RestorePtes(comms_state_t* state, PEPROCESS Process, PVOID Base, SIZE_T Siz
                 state->Api.RtlCopyMemory(Buffer, Original, BufferSize);
 
                 // Buffer -> Base
-                if (Process) { state->Api.KeStackAttachProcess(Process, &ApcState); }
+                ATTACH(Process, &ApcState);
                 for (Page = 0, Address = (ULONG_PTR)Base; Page < nPages; ++Page, Address += PAGE_SIZE) {
                     *state->Api.MiGetPteAddress((PVOID)Address) = Buffer[Page];
                 }
-                if (Process) { state->Api.KeUnstackDetachProcess(&ApcState); }
+                DETACH(Process, &ApcState);
 
                 Result = TRUE;
             }
@@ -250,9 +230,9 @@ VOID DuplicateHandle(comms_state_t* state, PEPROCESS Process, HANDLE SrcHandle, 
 
     Status = state->Api.ZwDuplicateObject(NtCurrentProcess(), NtCurrentProcess(), NtCurrentProcess(), &SrcProcess, 0, 0, DUPLICATE_SAME_ACCESS | DUPLICATE_SAME_ATTRIBUTES);
     if (NT_SUCCESS(Status)) {
-        state->Api.KeStackAttachProcess(Process, &ApcState);
+        ATTACH(Process, &ApcState);
         state->Api.ZwDuplicateObject(SrcProcess, SrcHandle, DstProcess, DstHandle, Access, 0, Options | DUPLICATE_SAME_ATTRIBUTES);
-        state->Api.KeUnstackDetachProcess(&ApcState);
+        DETACH(Process, &ApcState);
         state->Api.ZwClose(SrcProcess);
     }
 }
@@ -260,18 +240,18 @@ VOID DuplicateHandle(comms_state_t* state, PEPROCESS Process, HANDLE SrcHandle, 
 VOID CloseHandle(comms_state_t* state, PEPROCESS Process, HANDLE Handle) {
     KAPC_STATE ApcState;
 
-    state->Api.KeStackAttachProcess(Process, &ApcState);
+    ATTACH(Process, &ApcState);
     state->Api.ZwClose(Handle);
-    state->Api.KeUnstackDetachProcess(&ApcState);
+    DETACH(Process, &ApcState);
 }
 
 BOOL ProcessMemLock(comms_state_t* state, PEPROCESS Process, PVOID Base, SIZE_T Size) {
     KAPC_STATE ApcState;
     NTSTATUS Status = -1;
 
-    state->Api.KeStackAttachProcess(Process, &ApcState);
+    ATTACH(Process, &ApcState);
     Status = state->Api.ZwLockVirtualMemory(NtCurrentProcess(), &Base, &Size, MAP_PROCESS);
-    state->Api.KeUnstackDetachProcess(&ApcState);
+    DETACH(Process, &ApcState);
 
     return NT_SUCCESS(Status);
 }
@@ -280,11 +260,91 @@ BOOL ProcessMemUnlock(comms_state_t* state, PEPROCESS Process, PVOID Base, SIZE_
     KAPC_STATE ApcState;
     NTSTATUS Status = -1;
 
-    state->Api.KeStackAttachProcess(Process, &ApcState);
+    ATTACH(Process, &ApcState);
     Status = state->Api.ZwUnlockVirtualMemory(NtCurrentProcess(), &Base, &Size, MAP_PROCESS);
-    state->Api.KeUnstackDetachProcess(&ApcState);
+    DETACH(Process, &ApcState);
 
     return NT_SUCCESS(Status);
+}
+
+ULONG_PTR DisableWriteProtect(comms_state_t* state, PGROUP_AFFINITY GroupAffinity) {
+    // Get current processor
+    PROCESSOR_NUMBER ProcessorNumber;
+    state->Api.KeGetCurrentProcessorNumberEx(&ProcessorNumber);
+
+    // Make sure we run on that processor only
+    GROUP_AFFINITY NewGroupAffinity;
+    NewGroupAffinity.Group = ProcessorNumber.Group;
+    NewGroupAffinity.Mask = (KAFFINITY)1 << ProcessorNumber.Number;
+    state->Api.KeSetSystemGroupAffinityThread(&NewGroupAffinity, GroupAffinity);
+
+    ULONG_PTR Result = 0;
+
+    __asm {
+        cli // Disable hardware interrupts
+        mov rax, cr0
+        mov Result, rax
+        and rax, 0xFFFFFFFFFFFEFFFF // Clear WP
+        mov cr0, rax
+    }
+
+    return Result;
+}
+
+VOID RestoreWriteProtect(comms_state_t* state, ULONG_PTR _CR0, PGROUP_AFFINITY GroupAffinity) {
+    __asm {
+        mov rax, _CR0
+        mov cr0, rax
+        sti
+    }
+
+    state->Api.KeRevertToUserGroupAffinityThread(GroupAffinity);
+}
+
+VOID ProcessForceWrite(comms_state_t* state, PEPROCESS Process, PVOID Src, PVOID Dst, SIZE_T Size) {
+    KAPC_STATE ApcState;
+    HANDLE Memory;
+
+    if (EnsureBuffer(state, Size)) {
+        if (EnsureUserMode(Src, Size) && EnsureUserMode(Dst, Size)) { // No kernel-mode r/w
+            if ((Memory = state->Api.MmSecureVirtualMemory(Src, Size, PAGE_READONLY))) {
+                state->Api.RtlCopyMemory(state->Buffer.Ptr, Src, Size); // Src -> Buffer
+                state->Api.MmUnsecureVirtualMemory(Memory);
+            }
+
+            ATTACH(Process, &ApcState);
+            if (Memory && (Memory = state->Api.MmSecureVirtualMemory(Dst, Size, PAGE_READONLY))) {
+                GROUP_AFFINITY GroupAffinity;
+                ULONG_PTR CR0 = DisableWriteProtect(state, &GroupAffinity);
+                state->Api.RtlCopyMemory(Dst, state->Buffer.Ptr, Size); // Buffer -> Dst
+                RestoreWriteProtect(state, CR0, &GroupAffinity);
+                state->Api.MmUnsecureVirtualMemory(Memory);
+            }
+            DETACH(Process, &ApcState);
+        }
+    }
+}
+
+BOOL ProcessMemQuery(comms_state_t* state, comms_mem_info_t* info, PEPROCESS Process, PVOID Base) {
+    KAPC_STATE ApcState;
+    MEMORY_BASIC_INFORMATION MemInfo;
+    NTSTATUS Status = -1;
+
+    ATTACH(Process, &ApcState);
+    Status = state->Api.ZwQueryVirtualMemory(NtCurrentProcess(), Base, MemoryBasicInformation, &MemInfo, sizeof(MemInfo), NULL);
+    DETACH(Process, &ApcState);
+
+    if (info && NT_SUCCESS(Status)) {
+        info->base = (uint64_t)MemInfo.BaseAddress;
+        info->size = MemInfo.RegionSize;
+        info->state = MemInfo.State;
+        info->protect = MemInfo.Protect;
+        info->type = MemInfo.Type;
+
+        return TRUE;
+    }
+
+    return FALSE;
 }
 
 PVOID FindPattern(comms_state_t* state, PEPROCESS Process, PVOID Start, SIZE_T Size, PUCHAR Pattern, PUCHAR Mask) {
@@ -356,30 +416,13 @@ PVOID GetSyscall(comms_state_t* state, UINT32 Hash) {
 }
 
 void comms_wait(comms_state_t* state) {
+    LARGE_INTEGER frequency;
+    LARGE_INTEGER counter;
+    
     while (!state->Exit) {
-
-        LARGE_INTEGER frequency;
-        LARGE_INTEGER counter = state->Api.KeQueryPerformanceCounter(&frequency);
-        counter.QuadPart += state->Shared.Ptr->Timeout * frequency.QuadPart / 1000;
-
-        /*while (!(state->Shared.Ptr->SignalUM)) {
-            _mm_monitor(&(state->Shared.Ptr->SignalUM), 0, 0);
-            _mm_mwait(0, 0);
-
-            if (state->Api.KeQueryPerformanceCounter(NULL).QuadPart > counter.QuadPart) {
-                return;
-            }
-        }*/
-
-        /*while (!(state->Shared.Ptr->SignalUM)) {
-            _mm_pause();
-            _mm_mfence();
-
-            if (state->Api.KeQueryPerformanceCounter(NULL).QuadPart > counter.QuadPart) {
-                return;
-            }
-        }*/
-
+        counter = state->Api.KeQueryPerformanceCounter(&frequency);
+        counter.QuadPart += (LONGLONG)(((long double)-state->Shared.Ptr->Timeout) / 10000000.L * (long double)frequency.QuadPart);
+        
         do {
             state->Api.NtWaitForAlertByThreadId(&(state->Shared.Ptr->UM.Signal), &(state->Shared.Ptr->Timeout));
             if (state->Api.KeQueryPerformanceCounter(NULL).QuadPart > counter.QuadPart) {
@@ -391,7 +434,7 @@ void comms_wait(comms_state_t* state) {
         comms_dispatch(state, (comms_header_t*)state->Shared.Ptr->Msg, state->Shared.Ptr->Size);
 
         counter = state->Api.KeQueryPerformanceCounter(&frequency);
-        counter.QuadPart += state->Shared.Ptr->Timeout * frequency.QuadPart / 1000;
+        counter.QuadPart += (LONGLONG)(((long double)-state->Shared.Ptr->Timeout) / 10000000.L * (long double)frequency.QuadPart);
 
         state->Shared.Ptr->KM.Signal = 1;
         while (state->Shared.Ptr->KM.Signal) {
@@ -447,18 +490,6 @@ void comms_find_pattern(comms_state_t* state, comms_find_pattern_t* msg, size_t 
 
 void comms_exit(comms_state_t* state) {
     state->Exit = TRUE;
-}
-
-void comms_get_module(comms_state_t* state, comms_get_module_t* msg, size_t size) {
-    if (size < sizeof(comms_get_module_t)) {
-        return;
-    }
-
-    void* module_base = 0;
-    uint32_t module_size = 0;
-    GetProcessModule(state, (void*)msg->process, msg->module, &module_base, &module_size);
-    msg->module_base = (uint64_t)module_base;
-    msg->module_size = (uint64_t)module_size;
 }
 
 void comms_mem_alloc(comms_state_t* state, comms_mem_alloc_t* msg, size_t size) {
@@ -535,6 +566,45 @@ void comms_mem_unlock(comms_state_t* state, comms_mem_unlock_t* msg, size_t size
     msg->header.result = (uint64_t)ProcessMemUnlock(state, (void*)msg->process, (void*)msg->base, msg->size);
 }
 
+void comms_force_write(comms_state_t* state, comms_force_write_t* msg, size_t size) {
+    if (size < sizeof(comms_force_write_t)) {
+        return;
+    }
+
+    ProcessForceWrite(state, (void*)msg->process, (void*)msg->src, (void*)msg->dst, msg->size);
+}
+
+void comms_sleep(comms_state_t* state, comms_sleep_t* msg, size_t size) {
+    if (size < sizeof(comms_sleep_t)) {
+        return;
+    }
+
+    LARGE_INTEGER interval;
+
+    interval.QuadPart = -(msg->interval);
+    if (interval.QuadPart < state->Shared.Ptr->Timeout) {
+        interval.QuadPart = state->Shared.Ptr->Timeout;
+    }
+
+    state->Api.KeDelayExecutionThread(KernelMode, FALSE, &interval);
+}
+
+void comms_get_peb(comms_state_t* state, comms_get_peb_t* msg, size_t size) {
+    if (size < sizeof(comms_get_peb_t)) {
+        return;
+    }
+
+    msg->header.result = (uint64_t)state->Api.PsGetProcessPeb(msg->process ? (void*)msg->process : state->Api.IoGetCurrentProcess());
+}
+
+void comms_mem_query(comms_state_t* state, comms_mem_query_t* msg, size_t size) {
+    if (size < sizeof(comms_mem_query_t)) {
+        return;
+    }
+
+    msg->header.result = (uint64_t)ProcessMemQuery(state, &msg->info, (void*)msg->process, (void*)msg->base);
+}
+
 void comms_init(comms_init_t* msg, size_t size) {
     comms_state_t state;
 
@@ -576,6 +646,17 @@ void comms_init(comms_init_t* msg, size_t size) {
     state.Api.KeLeaveCriticalRegion = GetSystemRoutine(&state, L"KeLeaveCriticalRegion");
     state.Api.ZwLockVirtualMemory = GetSystemRoutine(&state, L"ZwLockVirtualMemory");
     state.Api.ZwUnlockVirtualMemory = GetSystemRoutine(&state, L"ZwUnlockVirtualMemory");
+    state.Api.KeGetCurrentProcessorNumberEx = GetSystemRoutine(&state, L"KeGetCurrentProcessorNumberEx");
+    state.Api.KeSetSystemGroupAffinityThread = GetSystemRoutine(&state, L"KeSetSystemGroupAffinityThread");
+    state.Api.KeRevertToUserGroupAffinityThread = GetSystemRoutine(&state, L"KeRevertToUserGroupAffinityThread");
+    state.Api.IoAllocateMdl = GetSystemRoutine(&state, L"IoAllocateMdl");
+    state.Api.IoFreeMdl = GetSystemRoutine(&state, L"IoFreeMdl");
+    state.Api.MmMapLockedPagesSpecifyCache = GetSystemRoutine(&state, L"MmMapLockedPagesSpecifyCache");
+    state.Api.MmUnmapLockedPages = GetSystemRoutine(&state, L"MmUnmapLockedPages");
+    state.Api.MmProbeAndLockPages = GetSystemRoutine(&state, L"MmProbeAndLockPages");
+    state.Api.MmUnlockPages = GetSystemRoutine(&state, L"MmUnlockPages");
+    state.Api.KeDelayExecutionThread = GetSystemRoutine(&state, L"KeDelayExecutionThread");
+    state.Api.ZwQueryVirtualMemory = GetSystemRoutine(&state, L"ZwQueryVirtualMemory");
 
     state.Api.KiServicesTab = (uint64_t*)GetModuleExport(state.Kernel, "NtImageInfo") + 3;
     state.Api.NtAlertThreadByThreadId = GetSyscall(&state, HashSyscall("AlertThreadByThreadId"));
@@ -648,7 +729,6 @@ void comms_dispatch(comms_state_t* state, comms_header_t* header, size_t size) {
         case eCommsInit: comms_init((comms_init_t*)header, size);  break; // comms_init creates its own state
         case eCommsFindPattern: comms_find_pattern(state, (comms_find_pattern_t*)header, size); break;
         case eCommsExit: comms_exit(state); break;
-        case eCommsGetModule: comms_get_module(state, (comms_get_module_t*)header, size); break;
         case eCommsMemAlloc: comms_mem_alloc(state, (comms_mem_alloc_t*)header, size); break;
         case eCommsMemFree: comms_mem_free(state, (comms_mem_free_t*)header, size); break;
         case eCommsReplacePtes: comms_replace_ptes(state, (comms_replace_ptes_t*)header, size); break;
@@ -657,6 +737,10 @@ void comms_dispatch(comms_state_t* state, comms_header_t* header, size_t size) {
         case eCommsCloseHandle: comms_close_handle(state, (comms_close_handle_t*)header, size); break;
         case eCommsMemLock: comms_mem_lock(state, (comms_mem_lock_t*)header, size); break;
         case eCommsMemUnlock: comms_mem_unlock(state, (comms_mem_unlock_t*)header, size); break;
+        case eCommsForceWrite: comms_force_write(state, (comms_force_write_t*)header, size); break;
+        case eCommsSleep: comms_sleep(state, (comms_sleep_t*)header, size); break;
+        case eCommsGetPeb: comms_get_peb(state, (comms_get_peb_t*)header, size); break;
+        case eCommsMemQuery: comms_mem_query(state, (comms_mem_query_t*)header, size); break;
         }
     }
 

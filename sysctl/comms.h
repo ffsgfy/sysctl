@@ -34,16 +34,27 @@ typedef VOID (NTAPI*KeEnterCriticalRegion_t)(VOID);
 typedef VOID (NTAPI* KeLeaveCriticalRegion_t)(VOID);
 typedef NTSTATUS(NTAPI*ZwLockVirtualMemory_t)(HANDLE ProcessHandle, PVOID* BaseAddress, PSIZE_T RegionSize, ULONG MapType);
 typedef NTSTATUS(NTAPI*ZwUnlockVirtualMemory_t)(HANDLE ProcessHandle, PVOID* BaseAddress, PSIZE_T RegionSize, ULONG MapType);
+typedef ULONG (NTAPI*KeGetCurrentProcessorNumberEx_t)(PPROCESSOR_NUMBER ProcNumber);
+typedef VOID (NTAPI*KeSetSystemGroupAffinityThread_t)(PGROUP_AFFINITY Affinity, PGROUP_AFFINITY PreviousAffinity);
+typedef VOID (NTAPI*KeRevertToUserGroupAffinityThread_t)(PGROUP_AFFINITY PreviousAffinity);
+typedef PMDL (NTAPI*IoAllocateMdl_t)(PVOID VirtualAddress,ULONG Length, BOOLEAN SecondaryBuffer, BOOLEAN ChargeQuota, PVOID Irp);
+typedef VOID (NTAPI*IoFreeMdl_t)(PMDL Mdl);
+typedef PVOID (NTAPI*MmMapLockedPagesSpecifyCache_t)(PMDL MemoryDescriptorList, KPROCESSOR_MODE AccessMode, MEMORY_CACHING_TYPE CacheType, PVOID RequestedAddress, ULONG BugCheckOnFailure, ULONG Priority);
+typedef VOID (NTAPI*MmUnmapLockedPages_t)(PVOID BaseAddress, PMDL MemoryDescriptorList);
+typedef VOID (NTAPI*MmProbeAndLockPages_t)(PMDL MemoryDescriptorList, KPROCESSOR_MODE AccessMode, LOCK_OPERATION Operation);
+typedef VOID (NTAPI*MmUnlockPages_t)(PMDL MemoryDescriptorList);
+typedef NTSTATUS (NTAPI*KeDelayExecutionThread_t)(KPROCESSOR_MODE WaitMode, BOOLEAN Alertable, PLARGE_INTEGER Interval);
+typedef NTSTATUS (NTAPI*ZwQueryVirtualMemory_t)(HANDLE ProcessHandle, PVOID BaseAddress, MEMORY_INFORMATION_CLASS MemoryInformationClass, PVOID MemoryInformation, SIZE_T MemoryInformationLength, PSIZE_T ReturnLength);
 
 typedef NTSTATUS (NTAPI*NtAlertThreadByThreadId_t)(HANDLE ThreadId);
-typedef NTSTATUS (NTAPI*NtWaitForAlertByThreadId_t)(PVOID Address, UINT64* Milliseconds);
+typedef NTSTATUS (NTAPI*NtWaitForAlertByThreadId_t)(PVOID Address, /*PLARGE_INTEGER*/ int64_t* Timeout);
 
 typedef PMMPTE (NTAPI*MiGetPteAddress_t)(PVOID Address);
 
 typedef struct {
     uint64_t Msg; // pointer to comms_header_t
     uint64_t Size; // msg size
-    uint64_t Timeout; // milliseconds
+    int64_t Timeout; // units of -0.1 microseconds
 
     struct {
         uint64_t Signal;
@@ -63,7 +74,7 @@ typedef struct {
         comms_shared_t* Ptr;
         HANDLE Handle;
     } Shared;
-    
+
     struct {
         MmGetSystemRoutineAddress_t MmGetSystemRoutineAddress;
         PsLookupProcessByProcessId_t PsLookupProcessByProcessId;
@@ -93,6 +104,17 @@ typedef struct {
         KeLeaveCriticalRegion_t KeLeaveCriticalRegion;
         ZwLockVirtualMemory_t ZwLockVirtualMemory;
         ZwUnlockVirtualMemory_t ZwUnlockVirtualMemory;
+        KeGetCurrentProcessorNumberEx_t KeGetCurrentProcessorNumberEx;
+        KeSetSystemGroupAffinityThread_t KeSetSystemGroupAffinityThread;
+        KeRevertToUserGroupAffinityThread_t KeRevertToUserGroupAffinityThread;
+        IoAllocateMdl_t IoAllocateMdl;
+        IoFreeMdl_t IoFreeMdl;
+        MmMapLockedPagesSpecifyCache_t MmMapLockedPagesSpecifyCache;
+        MmUnmapLockedPages_t MmUnmapLockedPages;
+        MmProbeAndLockPages_t MmProbeAndLockPages;
+        MmUnlockPages_t MmUnlockPages;
+        KeDelayExecutionThread_t KeDelayExecutionThread;
+        ZwQueryVirtualMemory_t ZwQueryVirtualMemory;
 
         void* KiServicesTab;
         NtAlertThreadByThreadId_t NtAlertThreadByThreadId;
@@ -118,7 +140,6 @@ enum {
     eCommsFindPattern,
     eCommsExit,
     eCommsHeartbeat,
-    eCommsGetModule,
     eCommsMemAlloc,
     eCommsMemFree,
     eCommsReplacePtes,
@@ -127,6 +148,10 @@ enum {
     eCommsCloseHandle,
     eCommsMemLock,
     eCommsMemUnlock,
+    eCommsForceWrite,
+    eCommsSleep,
+    eCommsGetPeb,
+    eCommsMemQuery,
 
     eCommsEnumSize
 };
@@ -152,7 +177,7 @@ typedef struct {
     uint64_t src;
     uint64_t dst;
     uint64_t size;
-} comms_read_t, comms_write_t;
+} comms_read_t, comms_write_t, comms_force_write_t;
 
 typedef struct {
     comms_header_t header;
@@ -169,14 +194,6 @@ typedef struct {
     uint8_t pattern[COMMS_PATTERN_LENGTH + 1];
     uint8_t mask[COMMS_PATTERN_LENGTH + 1];
 } comms_find_pattern_t;
-
-typedef struct {
-    comms_header_t header;
-    uint64_t process;
-    uint64_t module; // djb2 hash of base dll name
-    uint64_t module_base;
-    uint64_t module_size;
-} comms_get_module_t;
 
 typedef struct {
     comms_header_t header;
@@ -234,5 +251,31 @@ typedef struct {
     uint64_t base;
     uint64_t size;
 } comms_mem_lock_t, comms_mem_unlock_t;
+
+typedef struct {
+    comms_header_t header;
+    uint64_t interval; // units of 0.1 microseconds
+} comms_sleep_t;
+
+typedef struct {
+    comms_header_t header;
+    uint64_t process;
+} comms_get_peb_t;
+
+typedef struct {
+    uint64_t base;
+    uint64_t size;
+    uint32_t state;
+    uint32_t protect;
+    uint32_t type;
+    uint32_t pad;
+} comms_mem_info_t;
+
+typedef struct {
+    comms_header_t header;
+    comms_mem_info_t info;
+    uint64_t process;
+    uint64_t base;
+} comms_mem_query_t;
 
 void comms_dispatch(comms_state_t* state, comms_header_t* header, size_t size);
