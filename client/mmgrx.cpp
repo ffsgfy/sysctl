@@ -2,7 +2,8 @@
 extern "C" {
 #include "winutils.h"
 }
-#include <cstdio>
+
+MmgrX* g_MmgrX = nullptr;
 
 void MmgrX::iter_memory(std::function<bool(comms_mem_info_t&, void*)> callback, void* arg) {
 	comms_mem_info_t info = { 0, 0, 0, 0, 0, 0 };

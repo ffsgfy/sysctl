@@ -115,6 +115,10 @@ bool Mmgr::mem_query(void* base, comms_mem_info_t* info) {
 	return comms_mem_query(m_process, base, info, &m_comms_shared);
 }
 
+uint32_t Mmgr::mem_protect(void* base, size_t size, uint32_t protect) {
+	return comms_mem_protect(m_process, base, size, protect, &m_comms_shared);
+}
+
 bool Mmgr::replace_ptes(uint64_t src_process, void* src_base, uint64_t dst_process, void* dst_base, size_t size, void* original) {
 	return comms_replace_ptes(src_process, src_base, dst_process, dst_base, size, original, &m_comms_shared);
 }

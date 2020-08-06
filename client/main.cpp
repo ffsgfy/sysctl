@@ -41,18 +41,21 @@ int main() {
     }
 
     MmgrX mmgr;
-    if (!mmgr.attach(L"idle.exe")) {
+    if (!mmgr.attach(L"explorer.exe")) {
         return 1;
     }
 
     g_Mmgr = &mmgr;
+    g_MmgrX = &mmgr;
 
-    auto cb = [](comms_mem_info_t& info, void*) {
-        printf("%p (%lli bytes)\n", (void*)info.base, info.size);
-        return true;
-    };
+    void* ex_base = nullptr;
+    uint32_t ex_size = 0;
+    mmgr.get_module(L"Explorer.EXE", &ex_base, &ex_size);
+    mmgr.mem_protect(ex_base, PAGE_SIZE, PAGE_READONLY);
 
-    mmgr.iter_memory(cb, nullptr);
+    DebugBreak();
+
+    mmgr.force_write((void*)"HA", ex_base, 2);
 }
 
 int main6() {

@@ -26,6 +26,7 @@ enum {
     eCommsSleep,
     eCommsGetPeb,
     eCommsMemQuery,
+    eCommsMemProtect,
 
     eCommsEnumSize
 };
@@ -168,6 +169,14 @@ typedef struct {
     uint64_t base;
 } comms_mem_query_t;
 
+typedef struct {
+    comms_header_t header;
+    uint64_t process;
+    uint64_t base;
+    uint64_t size;
+    uint64_t protect;
+} comms_mem_protect_t;
+
 void comms_dispatch(comms_header_t* msg, size_t size, comms_shared_t* shared);
 uint64_t comms_get_process(uint32_t process_id, comms_shared_t* shared);
 void comms_dereference(uint64_t object, comms_shared_t* shared);
@@ -189,3 +198,4 @@ void comms_force_write(uint64_t process, void* src, void* dst, size_t size, comm
 void comms_sleep(uint64_t interval, comms_shared_t* shared);
 void* comms_get_peb(uint64_t process, comms_shared_t* shared);
 bool comms_mem_query(uint64_t process, void* base, comms_mem_info_t* info, comms_shared_t* shared);
+uint32_t comms_mem_protect(uint64_t process, void* base, size_t size, uint32_t protect, comms_shared_t* shared);

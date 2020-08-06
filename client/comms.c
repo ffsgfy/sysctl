@@ -158,3 +158,9 @@ bool comms_mem_query(uint64_t process, void* base, comms_mem_info_t* info, comms
     *info = msg.info;
     return (bool)msg.header.result;
 }
+
+uint32_t comms_mem_protect(uint64_t process, void* base, size_t size, uint32_t protect, comms_shared_t* shared) {
+    comms_mem_protect_t msg = { { eCommsMemProtect, 0 }, process, (uint64_t)(uintptr_t)base, (uint64_t)size, (uint64_t)protect };
+    comms_dispatch(&msg.header, sizeof(msg), shared);
+    return (uint32_t)msg.header.result;
+}

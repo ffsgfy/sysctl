@@ -11,3 +11,5 @@ public:
 	void get_module(const wchar_t* module, void** base, uint32_t* size);
 	void* find_pattern(const wchar_t* module, const char* pattern, const char* mask);
 };
+
+extern MmgrX* g_MmgrX;

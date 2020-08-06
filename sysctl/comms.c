@@ -281,7 +281,7 @@ ULONG_PTR DisableWriteProtect(comms_state_t* state, PGROUP_AFFINITY GroupAffinit
     ULONG_PTR Result = 0;
 
     __asm {
-        cli // Disable hardware interrupts
+        // cli
         mov rax, cr0
         mov Result, rax
         and rax, 0xFFFFFFFFFFFEFFFF // Clear WP
@@ -295,7 +295,7 @@ VOID RestoreWriteProtect(comms_state_t* state, ULONG_PTR _CR0, PGROUP_AFFINITY G
     __asm {
         mov rax, _CR0
         mov cr0, rax
-        sti
+        // sti
     }
 
     state->Api.KeRevertToUserGroupAffinityThread(GroupAffinity);
@@ -345,6 +345,17 @@ BOOL ProcessMemQuery(comms_state_t* state, comms_mem_info_t* info, PEPROCESS Pro
     }
 
     return FALSE;
+}
+
+ULONG ProcessMemProtect(comms_state_t* state, PEPROCESS Process, PVOID Base, SIZE_T Size, ULONG Protect) {
+    KAPC_STATE ApcState;
+    NTSTATUS Status = -1;
+
+    ATTACH(Process, &ApcState);
+    Status = state->Api.ZwProtectVirtualMemory(NtCurrentProcess(), &Base, &Size, Protect, &Protect);
+    DETACH(Process, &ApcState);
+
+    return NT_SUCCESS(Status) ? Protect : 0;
 }
 
 PVOID FindPattern(comms_state_t* state, PEPROCESS Process, PVOID Start, SIZE_T Size, PUCHAR Pattern, PUCHAR Mask) {
@@ -406,7 +417,7 @@ UINT32 HashSyscall(PCHAR RoutineName) {
 
 PVOID GetSyscall(comms_state_t* state, UINT32 Hash) {
     PKISERVICESTAB_ENTRY Entry = (PKISERVICESTAB_ENTRY)state->Api.KiServicesTab;
-    for (size_t i = 0; i < 464; ++i, ++Entry) {
+    for (size_t i = 0; i < state->Api.KiServicesTabSize; ++i, ++Entry) {
         if (Entry->NameHash == Hash) {
             return Entry->SystemService;
         }
@@ -418,7 +429,7 @@ PVOID GetSyscall(comms_state_t* state, UINT32 Hash) {
 void comms_wait(comms_state_t* state) {
     LARGE_INTEGER frequency;
     LARGE_INTEGER counter;
-    
+
     while (!state->Exit) {
         counter = state->Api.KeQueryPerformanceCounter(&frequency);
         counter.QuadPart += (LONGLONG)(((long double)-state->Shared.Ptr->Timeout) / 10000000.L * (long double)frequency.QuadPart);
@@ -605,6 +616,14 @@ void comms_mem_query(comms_state_t* state, comms_mem_query_t* msg, size_t size) 
     msg->header.result = (uint64_t)ProcessMemQuery(state, &msg->info, (void*)msg->process, (void*)msg->base);
 }
 
+void comms_mem_protect(comms_state_t* state, comms_mem_protect_t* msg, size_t size) {
+    if (size < sizeof(comms_mem_protect_t)) {
+        return;
+    }
+
+    msg->header.result = (uint64_t)ProcessMemProtect(state, (void*)msg->process, (void*)msg->base, msg->size, msg->protect);
+}
+
 void comms_init(comms_init_t* msg, size_t size) {
     comms_state_t state;
 
@@ -657,8 +676,10 @@ void comms_init(comms_init_t* msg, size_t size) {
     state.Api.MmUnlockPages = GetSystemRoutine(&state, L"MmUnlockPages");
     state.Api.KeDelayExecutionThread = GetSystemRoutine(&state, L"KeDelayExecutionThread");
     state.Api.ZwQueryVirtualMemory = GetSystemRoutine(&state, L"ZwQueryVirtualMemory");
+    state.Api.ZwProtectVirtualMemory = GetSystemRoutine(&state, L"ZwProtectVirtualMemory");
 
     state.Api.KiServicesTab = (uint64_t*)GetModuleExport(state.Kernel, "NtImageInfo") + 3;
+    state.Api.KiServicesTabSize = ((uintptr_t)GetModuleExport(state.Kernel, "NtBuildGUID") - (uintptr_t)state.Api.KiServicesTab) / sizeof(KISERVICESTAB_ENTRY);
     state.Api.NtAlertThreadByThreadId = GetSyscall(&state, HashSyscall("AlertThreadByThreadId"));
     state.Api.NtWaitForAlertByThreadId = GetSyscall(&state, HashSyscall("WaitForAlertByThreadId"));
 
@@ -741,6 +762,7 @@ void comms_dispatch(comms_state_t* state, comms_header_t* header, size_t size) {
         case eCommsSleep: comms_sleep(state, (comms_sleep_t*)header, size); break;
         case eCommsGetPeb: comms_get_peb(state, (comms_get_peb_t*)header, size); break;
         case eCommsMemQuery: comms_mem_query(state, (comms_mem_query_t*)header, size); break;
+        case eCommsMemProtect: comms_mem_protect(state, (comms_mem_protect_t*)header, size); break;
         }
     }
 

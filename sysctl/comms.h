@@ -45,6 +45,7 @@ typedef VOID (NTAPI*MmProbeAndLockPages_t)(PMDL MemoryDescriptorList, KPROCESSOR
 typedef VOID (NTAPI*MmUnlockPages_t)(PMDL MemoryDescriptorList);
 typedef NTSTATUS (NTAPI*KeDelayExecutionThread_t)(KPROCESSOR_MODE WaitMode, BOOLEAN Alertable, PLARGE_INTEGER Interval);
 typedef NTSTATUS (NTAPI*ZwQueryVirtualMemory_t)(HANDLE ProcessHandle, PVOID BaseAddress, MEMORY_INFORMATION_CLASS MemoryInformationClass, PVOID MemoryInformation, SIZE_T MemoryInformationLength, PSIZE_T ReturnLength);
+typedef NTSTATUS (NTAPI*ZwProtectVirtualMemory_t)(HANDLE ProcessHandle, PVOID* BaseAddress, PSIZE_T RegionSize, ULONG NewProtect, PULONG OldProtect);
 
 typedef NTSTATUS (NTAPI*NtAlertThreadByThreadId_t)(HANDLE ThreadId);
 typedef NTSTATUS (NTAPI*NtWaitForAlertByThreadId_t)(PVOID Address, /*PLARGE_INTEGER*/ int64_t* Timeout);
@@ -115,8 +116,10 @@ typedef struct {
         MmUnlockPages_t MmUnlockPages;
         KeDelayExecutionThread_t KeDelayExecutionThread;
         ZwQueryVirtualMemory_t ZwQueryVirtualMemory;
+        ZwProtectVirtualMemory_t ZwProtectVirtualMemory;
 
         void* KiServicesTab;
+        size_t KiServicesTabSize;
         NtAlertThreadByThreadId_t NtAlertThreadByThreadId;
         NtWaitForAlertByThreadId_t NtWaitForAlertByThreadId;
 
@@ -152,6 +155,7 @@ enum {
     eCommsSleep,
     eCommsGetPeb,
     eCommsMemQuery,
+    eCommsMemProtect,
 
     eCommsEnumSize
 };
@@ -277,5 +281,13 @@ typedef struct {
     uint64_t process;
     uint64_t base;
 } comms_mem_query_t;
+
+typedef struct {
+    comms_header_t header;
+    uint64_t process;
+    uint64_t base;
+    uint64_t size;
+    uint64_t protect;
+} comms_mem_protect_t;
 
 void comms_dispatch(comms_state_t* state, comms_header_t* header, size_t size);

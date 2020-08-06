@@ -78,6 +78,7 @@ public:
 	bool mem_lock(void* base, size_t size);
 	bool mem_unlock(void* base, size_t size);
 	bool mem_query(void* base, comms_mem_info_t* info);
+	uint32_t mem_protect(void* base, size_t size, uint32_t protect);
 	
 	bool replace_ptes(uint64_t src_process, void* src_base, uint64_t dst_process, void* dst_base, size_t size, void* original);
 	std::unique_ptr<uint64_t[]> replace_ptes(uint64_t src_process, void* src_base, uint64_t dst_process, void* dst_base, size_t size);
