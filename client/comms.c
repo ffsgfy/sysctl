@@ -3,25 +3,27 @@
 
 GUID g_comms_guid = { 0xCC6A5BCD, 0xEC9A, 0x4641, { 0x95, 0x86, 0x5A, 0x32, 0x10, 0xC1, 0x7F, 0x4D } };
 UNICODE_STRING g_comms_name = RTL_CONSTANT_STRING(L"tPyNcCxOrSEg");
-bool g_comms_ready = false;
+// bool g_comms_ready = false;
+bool g_comms_started = false;
+bool g_comms_stopped = false;
 
 void comms_dispatch(comms_header_t* msg, size_t size, comms_shared_t* shared) {
     shared->msg = (uint64_t)msg;
     shared->size = (uint64_t)size;
     _mm_mfence();
 
-    while (!g_comms_ready) {
+    while (!g_comms_started) {
         Sleep(1);
     }
 
     shared->um.signal = 1;
-    while (shared->um.signal) {
+    while (!g_comms_stopped && shared->um.signal) {
         NtAlertThreadByThreadId((HANDLE)shared->km.thread_id);
     }
 
-    do {
+    while (!g_comms_stopped && !(shared->km.signal)) {
         NtWaitForAlertByThreadId(&(shared->km.signal), 0);
-    } while (!(shared->km.signal));
+    }
     shared->km.signal = 0;
 }
 
@@ -57,9 +59,11 @@ void comms_init(uint64_t kernel_ptr, size_t kernel_size, comms_shared_t* shared)
     shared->km.signal = 0;
     shared->km.thread_id = (uint64_t)GetCurrentThreadId();
 
-    g_comms_ready = true;
+    // g_comms_ready = true;
+    g_comms_started = true;
     NtSetSystemEnvironmentValueEx(&g_comms_name, &g_comms_guid, &msg, sizeof(msg), 1);
-    g_comms_ready = false;
+    // g_comms_ready = false;
+    g_comms_stopped = true;
 }
 
 void* comms_find_pattern(uint64_t process, void* start, size_t size, const char* pattern, const char* mask, comms_shared_t* shared) {

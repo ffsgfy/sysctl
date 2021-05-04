@@ -91,6 +91,14 @@ typedef ULONG PFN_NUMBER, * PPFN_NUMBER;
 #define DUPLICATE_SAME_ACCESS 0x00000002
 #define DUPLICATE_SAME_ATTRIBUTES 0x00000004
 
+#define STATUS_TIMEOUT ((DWORD)0x00000102L)
+
+#define SYNCHRONIZE                      (0x00100000L)
+#define STANDARD_RIGHTS_REQUIRED         (0x000F0000L)
+#define STANDARD_RIGHTS_READ             (0x00020000L)
+#define STANDARD_RIGHTS_WRITE            (0x00020000L)
+#define STANDARD_RIGHTS_EXECUTE          (0x00020000L)
+
 #define NtCurrentProcess() ((HANDLE)(LONG_PTR)(-1))
 
 typedef VOID EPROCESS, *PEPROCESS;
@@ -180,6 +188,20 @@ typedef struct _UNICODE_STRING
     PWSTR  Buffer;
 } UNICODE_STRING, * PUNICODE_STRING;
 typedef const UNICODE_STRING* PCUNICODE_STRING;
+
+typedef struct _OBJECT_ATTRIBUTES {
+    ULONG           Length;
+    HANDLE          RootDirectory;
+    PUNICODE_STRING ObjectName;
+    ULONG           Attributes;
+    PVOID           SecurityDescriptor;
+    PVOID           SecurityQualityOfService;
+} OBJECT_ATTRIBUTES;
+
+typedef struct _CLIENT_ID {
+    HANDLE UniqueProcess;
+    HANDLE UniqueThread;
+} CLIENT_ID;
 
 typedef struct _IA64_LOADER_BLOCK
 {

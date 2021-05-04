@@ -46,6 +46,7 @@ typedef VOID (NTAPI*MmUnlockPages_t)(PMDL MemoryDescriptorList);
 typedef NTSTATUS (NTAPI*KeDelayExecutionThread_t)(KPROCESSOR_MODE WaitMode, BOOLEAN Alertable, PLARGE_INTEGER Interval);
 typedef NTSTATUS (NTAPI*ZwQueryVirtualMemory_t)(HANDLE ProcessHandle, PVOID BaseAddress, MEMORY_INFORMATION_CLASS MemoryInformationClass, PVOID MemoryInformation, SIZE_T MemoryInformationLength, PSIZE_T ReturnLength);
 typedef NTSTATUS (NTAPI*ZwProtectVirtualMemory_t)(HANDLE ProcessHandle, PVOID* BaseAddress, PSIZE_T RegionSize, ULONG NewProtect, PULONG OldProtect);
+typedef NTSTATUS (NTAPI*ZwOpenThread_t)(HANDLE* ThreadHandle, ULONG DesiredAccess, OBJECT_ATTRIBUTES* ObjectAttributes, CLIENT_ID* ClientId);
 
 typedef NTSTATUS (NTAPI*NtAlertThreadByThreadId_t)(HANDLE ThreadId);
 typedef NTSTATUS (NTAPI*NtWaitForAlertByThreadId_t)(PVOID Address, /*PLARGE_INTEGER*/ int64_t* Timeout);
@@ -117,6 +118,7 @@ typedef struct {
         KeDelayExecutionThread_t KeDelayExecutionThread;
         ZwQueryVirtualMemory_t ZwQueryVirtualMemory;
         ZwProtectVirtualMemory_t ZwProtectVirtualMemory;
+        ZwOpenThread_t ZwOpenThread;
 
         void* KiServicesTab;
         size_t KiServicesTabSize;

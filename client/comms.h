@@ -5,6 +5,9 @@
 
 #define COMMS_PATTERN_LENGTH 31
 
+extern bool g_comms_started;
+extern bool g_comms_stopped;
+
 enum {
     eCommsGetProcess,
     eCommsDereference,

@@ -426,26 +426,37 @@ PVOID GetSyscall(comms_state_t* state, UINT32 Hash) {
     return NULL;
 }
 
+HANDLE OpenThread(comms_state_t* state, HANDLE ThreadId, ULONG DesiredAccess) {
+    HANDLE ThreadHandle = 0;
+    OBJECT_ATTRIBUTES ObjectAttributes;
+    CLIENT_ID ClientId;
+    u_memset((uint8_t*)&ObjectAttributes, 0, sizeof(ObjectAttributes));
+    ClientId.UniqueProcess = 0;
+    ClientId.UniqueThread = ThreadId;
+    state->Api.ZwOpenThread(&ThreadHandle, DesiredAccess, &ObjectAttributes, &ClientId);
+    return ThreadHandle;
+}
+
 void comms_wait(comms_state_t* state) {
     LARGE_INTEGER frequency;
     LARGE_INTEGER counter;
 
     while (!state->Exit) {
         counter = state->Api.KeQueryPerformanceCounter(&frequency);
-        counter.QuadPart += (LONGLONG)(((long double)-state->Shared.Ptr->Timeout) / 10000000.L * (long double)frequency.QuadPart);
+        counter.QuadPart += -state->Shared.Ptr->Timeout * frequency.QuadPart / 10000000LL;
         
-        do {
+        while (!(state->Shared.Ptr->UM.Signal)) {
             state->Api.NtWaitForAlertByThreadId(&(state->Shared.Ptr->UM.Signal), &(state->Shared.Ptr->Timeout));
             if (state->Api.KeQueryPerformanceCounter(NULL).QuadPart > counter.QuadPart) {
                 return;
             }
-        } while (!(state->Shared.Ptr->UM.Signal));
+        }
         state->Shared.Ptr->UM.Signal = 0;
 
         comms_dispatch(state, (comms_header_t*)state->Shared.Ptr->Msg, state->Shared.Ptr->Size);
 
         counter = state->Api.KeQueryPerformanceCounter(&frequency);
-        counter.QuadPart += (LONGLONG)(((long double)-state->Shared.Ptr->Timeout) / 10000000.L * (long double)frequency.QuadPart);
+        counter.QuadPart += -state->Shared.Ptr->Timeout * frequency.QuadPart / 10000000LL;
 
         state->Shared.Ptr->KM.Signal = 1;
         while (state->Shared.Ptr->KM.Signal) {
@@ -677,6 +688,7 @@ void comms_init(comms_init_t* msg, size_t size) {
     state.Api.KeDelayExecutionThread = GetSystemRoutine(&state, L"KeDelayExecutionThread");
     state.Api.ZwQueryVirtualMemory = GetSystemRoutine(&state, L"ZwQueryVirtualMemory");
     state.Api.ZwProtectVirtualMemory = GetSystemRoutine(&state, L"ZwProtectVirtualMemory");
+    state.Api.ZwOpenThread = GetSystemRoutine(&state, L"ZwOpenThread");
 
     state.Api.KiServicesTab = (uint64_t*)GetModuleExport(state.Kernel, "NtImageInfo") + 3;
     state.Api.KiServicesTabSize = ((uintptr_t)GetModuleExport(state.Kernel, "NtBuildGUID") - (uintptr_t)state.Api.KiServicesTab) / sizeof(KISERVICESTAB_ENTRY);

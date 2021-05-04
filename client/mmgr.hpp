@@ -25,7 +25,9 @@ public:
 	bool attach(const wchar_t* process_name);
 	void heartbeat();
 	void detach();
-	void stop(); // this invalidates the object
+
+	bool start();
+	void stop();
 
 	void sleep(uint64_t interval);
 	template<typename Rep, typename Period>
@@ -93,6 +95,7 @@ public:
 private:
 	comms_shared_t m_comms_shared;
 	std::thread m_comms_thread;
+	bool m_running = false;
 
 	uint32_t m_process_id = 0;
 	uint64_t m_process = 0;

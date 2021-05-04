@@ -39,8 +39,12 @@ int main() {
     if (!NT_SUCCESS(GetEnvironmentPrivilege())) {
         return GetLastError();
     }
-
+    
     MmgrX mmgr;
+    if (!mmgr.start()) {
+        return 1;
+    }
+
     if (!mmgr.attach(L"explorer.exe")) {
         return 1;
     }
@@ -51,11 +55,23 @@ int main() {
     void* ex_base = nullptr;
     uint32_t ex_size = 0;
     mmgr.get_module(L"Explorer.EXE", &ex_base, &ex_size);
-    mmgr.mem_protect(ex_base, PAGE_SIZE, PAGE_READONLY);
 
-    DebugBreak();
+    printf("%p %i\n", ex_base, ex_size);
 
-    mmgr.force_write((void*)"HA", ex_base, 2);
+    while (true) {
+        mmgr.heartbeat();
+        printf("Looping\n");
+        Sleep(500);
+    }
+
+    // mmgr.mem_protect(ex_base, PAGE_SIZE, PAGE_READONLY);
+    // DebugBreak();
+    // mmgr.force_write((void*)"HA", ex_base, 2);
+
+    printf("exiting\n");
+    mmgr.stop();
+
+    return 0;
 }
 
 int main6() {
