@@ -47,23 +47,21 @@ void Mmgr::detach() {
 bool Mmgr::start() {
 	std::lock_guard<lock_t> lock_guard(m_lock);
 
-	if (m_running) {
-		return false;
-	}
+	if (!m_running) {
+		g_comms_started = false;
+		g_comms_stopped = false;
 
-	g_comms_started = false;
-	g_comms_stopped = false;
-
-	uint64_t kernel_base = 0;
-	unsigned long kernel_size = 0;
-	GetSystemModule("ntoskrnl.exe", (void**)&kernel_base, &kernel_size);
-	if (kernel_base && kernel_size) {
-		m_comms_shared.timeout = 10000; // milliseconds
-		m_comms_shared.timeout *= -10000;
-		m_comms_shared.um.signal = 0;
-		m_comms_shared.um.thread_id = (uint64_t)GetCurrentThreadId();
-		m_comms_thread = std::thread(comms_init, kernel_base, kernel_size, &m_comms_shared);
-		m_running = true;
+		uint64_t kernel_base = 0;
+		unsigned long kernel_size = 0;
+		GetSystemModule("ntoskrnl.exe", (void**)&kernel_base, &kernel_size);
+		if (kernel_base && kernel_size) {
+			m_comms_shared.timeout = 10000; // milliseconds
+			m_comms_shared.timeout *= -10000;
+			m_comms_shared.um.signal = 0;
+			m_comms_shared.um.thread_id = (uint64_t)GetCurrentThreadId();
+			m_comms_thread = std::thread(comms_init, kernel_base, kernel_size, &m_comms_shared);
+			m_running = true;
+		}
 	}
 
 	return m_running;
